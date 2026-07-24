@@ -7,22 +7,23 @@ st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
+   def connect_to_gsheet():
     scope = [
-        "https://spreadsheets.google.com/feeds", 
-        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
     ]
-# Directly pass the secrets dictionary since TOML handles the newlines natively now
-creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"], 
-    scopes=scope
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
     )
-client = gspread.authorize(creds)
+    client = gspread.authorize(creds)
 
-sh = client.open("Event_Feedback")
-booking_sheet = sh.worksheet("Bookings")
-feedback_sheet = sh.worksheet("Feedback")
-return booking_sheet, feedback_sheet
+    sh = client.open("Event Feedback")  # Must match your sheet name exactly
+    booking_sheet = sh.worksheet("Bookings")
+    feedback_sheet = sh.worksheet("Feedback")
+    return booking_sheet, feedback_sheet
 
+# 2. CALL THE FUNCTION
 booking_sheet, feedback_sheet = connect_to_gsheet()
 
 # INVENTORY LIST
