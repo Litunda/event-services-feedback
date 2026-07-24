@@ -23,7 +23,6 @@ def connect_to_gsheet():
     feedback_sheet = sh.worksheet("Feedback")
     return booking_sheet, feedback_sheet
 
-
 booking_sheet, feedback_sheet = connect_to_gsheet()
 
 # INVENTORY LIST
