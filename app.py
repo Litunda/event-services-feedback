@@ -18,7 +18,7 @@ def connect_to_gsheet():
         )
         client = gspread.authorize(creds)
 
-        sh = client.open("Event Feedback")  # CHANGE THIS TO YOUR EXACT SHEET NAME
+        sh = client.open("Event_Feedback")  # CHANGE THIS TO YOUR EXACT SHEET NAME
         booking_sheet = sh.worksheet("Bookings")
         feedback_sheet = sh.worksheet("Feedback")
         return booking_sheet, feedback_sheet
