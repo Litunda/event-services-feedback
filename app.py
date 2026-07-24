@@ -23,7 +23,7 @@ def connect_to_gsheet():
         feedback_sheet = sh.worksheet("Feedback")
         return booking_sheet, feedback_sheet
         
- except Exception as e:
+except Exception as e:
         st.error(f"Google Connection Failed: {e}")
         st.stop() # stops the app so we see the error
 
