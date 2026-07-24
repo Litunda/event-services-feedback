@@ -1,80 +1,85 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import date
+import pandas as pd
 
 st.title("🎉 Event Services Feedback")
 st.write("Help us serve you better!")
 
-# 1. BASIC INFO
+# 1. CONNECT TO GOOGLE SHEETS
+def connect_to_gsheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("Event_Feedback").sheet1
+    return sheet
+
+# 2. BASIC INFO
 name = st.text_input("Your Name")
 phone = st.text_input("Your Phone Number")
 event_date = st.date_input("Event Date", date.today())
 place = st.text_input("📍 Location/Place of Event", "e.g. Kisumu, Milimani")
 company = st.text_input("Which company served you?", "Litunda Events")
 
-# 2. PREDICT WHAT THEY ORDERED BASED ON PACKAGE
-st.subheader("1. What type of event/package was this?")
-package = st.selectbox(
-    "Select your package",
-    ["Wedding Full Package", "Birthday Package", "Corporate Event", 
-     "Tents Only", "Catering Only", "Custom/Mixed"]
-)
-
-# PREDICTION LOGIC
-package_items = {
-    "Wedding Full Package": ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "Lighting"],
-    "Birthday Package": ["Tents", "Chairs & Tables", "Decoration", "Sound System"],
-    "Corporate Event": ["Tents", "Chairs & Tables", "Sound System", "Lighting"],
-    "Tents Only": ["Tents", "Chairs & Tables"],
-    "Catering Only": ["Catering"],
-    "Custom/Mixed": []
+# 3. FULL INVENTORY CATEGORIES
+st.subheader("1. What did you hire from us?")
+inventory = {
+    "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
+    "Visual Equipment": ["LED Screens", "Projector Screens", "LCD/Plasma Displays", "Backdrop Screens", "Interactive Touch Screens", "Mobile Screens"],
+    "Furniture & Setup": ["Chairs", "Tables", "Tents", "Podiums", "Stages"],
+    "Decoration Materials": ["Drapes", "Flowers", "Balloons", "Banners", "Branding Props"],
+    "Catering Materials": ["Cutlery", "Crockery", "Serving Stations", "Food Storage Units"],
+    "Stationery & Print": ["Invitations", "Programs", "Signage", "Name Tags"],
+    "Transport Vehicles": ["Vans", "Trucks", "Buses"],
+    "Safety Gear": ["Fire Extinguishers", "First Aid Kits", "Barriers", "Uniforms"],
+    "Power Supply": ["Generators", "Extension Cables", "Backup Batteries"],
+    "Technology Tools": ["Laptops", "Event Management Software", "Livestream Kits"]
 }
 
-predicted_items = package_items[package]
+selected_categories = st.multiselect("Select Categories you used", list(inventory.keys()))
 
-# If Custom, let them pick manually
-if package == "Custom/Mixed":
-    ordered_items = st.multiselect("Select services you ordered", 
-        ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "A-Frames", "MC/DJ", "Lighting"])
-else:
-    st.success(f"We predicted you ordered: {', '.join(predicted_items)}")
-    ordered_items = predicted_items
-    edit = st.checkbox("Add/Remove items?")
-    if edit:
-        ordered_items = st.multiselect("Edit your services", 
-            ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "A-Frames", "MC/DJ", "Lighting"],
-            default=predicted_items)
+ordered_items = []
+if selected_categories:
+    st.write("### Select specific items:")
+    for cat in selected_categories:
+        items = st.multiselect(f"{cat}", inventory[cat], key=cat)
+        ordered_items.extend(items)
 
-# 3. RATE ONLY PREDICTED ITEMS
+# 4. RATE + SAVE
 if ordered_items:
-    st.subheader("2. Rate the services you received")
+    st.subheader("2. Rate the items you received")
     ratings = {}
-    for service in ordered_items:
-        ratings[service] = st.slider(f"Rate our {service}", 1, 5, 3)
-    
+    for item in ordered_items:
+        ratings[item] = st.slider(f"Rate {item}", 1, 5, 3, key=item)
+
     staff = st.slider("How was our staff?", 1, 5, 5)
+    delivery = st.slider("How was delivery & setup?", 1, 5, 5)
     comments = st.text_area("Any comments or suggestions?")
-    
-    # 4. REFERRAL SECTION - THIS IS THE MONEY MAKER
+
+    # 5. REFERRAL SECTION
     st.subheader("3. Refer a Friend 🤝")
     refer = st.radio("Would you refer us to a friend?", ["Yes", "No", "Maybe"])
-    
     referral_name = ""
     referral_phone = ""
     if refer == "Yes":
-        st.write("Thank you! Please give us your friend's contact")
         referral_name = st.text_input("Friend's Name")
         referral_phone = st.text_input("Friend's Phone Number")
-        st.info("We will contact them with a special discount from you")
-    
+
     if st.button("Submit Feedback"):
-        st.success("Thank you! Your feedback has been submitted.")
-        st.balloons()
-        st.write("### Summary:")
-        st.write(f"**Location:** {place}")
-        st.write(f"**Services Rated:** {ratings}")
-        if refer == "Yes":
-            st.write(f"**Referral:** {referral_name} - {referral_phone}")
+        try:
+            sheet = connect_to_gsheet()
+            new_row = [
+                str(date.today()), name, phone, str(event_date), place, company,
+                ", ".join(ordered_items), str(ratings), staff, delivery, comments,
+                refer, referral_name, referral_phone
+            ]
+            sheet.append_row(new_row)
+            st.success("✅ Thank you! Your feedback has been saved.")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Error saving: {e}")
 else:
-    st.info("👆 Please select a package first")
+    st.info("👆 Please select at least 1 category first")
 
         
