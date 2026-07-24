@@ -1,89 +1,80 @@
 import streamlit as st
-from textblob import TextBlob
-import pandas as pd
-import sqlite3
+from datetime import date
 
-# Database
-conn = sqlite3.connect('event_services_feedback.db', check_same_thread=False)
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS feedback 
-             (customer_name TEXT, event_date TEXT, 
-              tents INTEGER, decor INTEGER, sound INTEGER, aframes INTEGER, catering INTEGER,
-              comment_improve TEXT, comment_adjust TEXT, sentiment TEXT)''')
-conn.commit()
+st.title("🎉 Event Services Feedback")
+st.write("Help us serve you better!")
 
-st.title("Event Services Feedback")
-st.write("Thank you for hiring us! Help us improve.")
+# 1. BASIC INFO
+name = st.text_input("Your Name")
+phone = st.text_input("Your Phone Number")
+event_date = st.date_input("Event Date", date.today())
+place = st.text_input("📍 Location/Place of Event", "e.g. Kisumu, Milimani")
+company = st.text_input("Which company served you?", "Litunda Events")
 
-# FORM
-col1, col2 = st.columns(2)
-with col1:
-    customer_name = st.text_input("Customer Name")
-with col2:
-    event_date = st.date_input("Event Date")
+# 2. PREDICT WHAT THEY ORDERED BASED ON PACKAGE
+st.subheader("1. What type of event/package was this?")
+package = st.selectbox(
+    "Select your package",
+    ["Wedding Full Package", "Birthday Package", "Corporate Event", 
+     "Tents Only", "Catering Only", "Custom/Mixed"]
+)
 
-st.subheader("Rate Our Services 1-5 stars")
-col1, col2, col3 = st.columns(3)
-with col1:
-    tents = st.slider("Tents & Seating", 1, 5)
-    sound = st.slider("Sound System", 1, 5)
-with col2:
-    decor = st.slider("Decoration", 1, 5)
-    aframes = st.slider("A-Frames / Signage", 1, 5)
-with col3:
-    catering = st.slider("Outside Catering", 1, 5)
+# PREDICTION LOGIC
+package_items = {
+    "Wedding Full Package": ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "Lighting"],
+    "Birthday Package": ["Tents", "Chairs & Tables", "Decoration", "Sound System"],
+    "Corporate Event": ["Tents", "Chairs & Tables", "Sound System", "Lighting"],
+    "Tents Only": ["Tents", "Chairs & Tables"],
+    "Catering Only": ["Catering"],
+    "Custom/Mixed": []
+}
 
-st.markdown("---")
-st.subheader("Your Feedback")
-comment_improve = st.text_area("1. What should we IMPROVE for next time?")
-comment_adjust = st.text_area("2. What should we ADJUST or do differently?")
+predicted_items = package_items[package]
 
-if st.button("Submit Feedback"):
-    if customer_name and (comment_improve or comment_adjust):
-        # Check sentiment from both comments
-        all_comments = comment_improve + " " + comment_adjust
-        blob = TextBlob(all_comments)
-        sentiment_score = blob.sentiment.polarity
-        
-        if sentiment_score > 0.1: sentiment = "Positive"
-        elif sentiment_score < -0.1: sentiment = "Negative"
-        else: sentiment = "Neutral"
-            
-        c.execute("INSERT INTO feedback VALUES (?,?,?,?,?,?,?,?,?,?)", 
-                  (customer_name, str(event_date), tents, decor, sound, aframes, catering,
-                   comment_improve, comment_adjust, sentiment))
-        conn.commit()
-        st.success(f"Thank you {customer_name}! Feedback saved.")
-    else:
-        st.warning("Please fill Customer Name and at least 1 feedback comment")
-
-st.markdown("---")
-st.header("Management Dashboard")
-
-df = pd.read_sql("SELECT * FROM feedback", conn)
-
-if not df.empty:
-    st.metric("Total Feedback", len(df))
-    
-    st.subheader("Average Service Ratings")
-    avg_ratings = df[['tents','decor','sound','aframes','catering']].mean().round(2)
-    st.bar_chart(avg_ratings)
-    
-    st.subheader("Sentiment")
-    st.bar_chart(df['sentiment'].value_counts())
-    
-    st.subheader("Key Feedback to Act On")
-    st.write("**IMPROVE:**")
-    for cmt in df['comment_improve'].dropna().tolist()[:5]:
-        st.write(f"- {cmt}")
-    st.write("**ADJUST:**")
-    for cmt in df['comment_adjust'].dropna().tolist()[:5]:
-        st.write(f"- {cmt}")
-        
-    st.subheader("All Submissions")
-    st.dataframe(df)
+# If Custom, let them pick manually
+if package == "Custom/Mixed":
+    ordered_items = st.multiselect("Select services you ordered", 
+        ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "A-Frames", "MC/DJ", "Lighting"])
 else:
-    st.info("No feedback yet.")
+    st.success(f"We predicted you ordered: {', '.join(predicted_items)}")
+    ordered_items = predicted_items
+    edit = st.checkbox("Add/Remove items?")
+    if edit:
+        ordered_items = st.multiselect("Edit your services", 
+            ["Tents", "Chairs & Tables", "Decoration", "Catering", "Sound System", "A-Frames", "MC/DJ", "Lighting"],
+            default=predicted_items)
 
-conn.close()
+# 3. RATE ONLY PREDICTED ITEMS
+if ordered_items:
+    st.subheader("2. Rate the services you received")
+    ratings = {}
+    for service in ordered_items:
+        ratings[service] = st.slider(f"Rate our {service}", 1, 5, 3)
+    
+    staff = st.slider("How was our staff?", 1, 5, 5)
+    comments = st.text_area("Any comments or suggestions?")
+    
+    # 4. REFERRAL SECTION - THIS IS THE MONEY MAKER
+    st.subheader("3. Refer a Friend 🤝")
+    refer = st.radio("Would you refer us to a friend?", ["Yes", "No", "Maybe"])
+    
+    referral_name = ""
+    referral_phone = ""
+    if refer == "Yes":
+        st.write("Thank you! Please give us your friend's contact")
+        referral_name = st.text_input("Friend's Name")
+        referral_phone = st.text_input("Friend's Phone Number")
+        st.info("We will contact them with a special discount from you")
+    
+    if st.button("Submit Feedback"):
+        st.success("Thank you! Your feedback has been submitted.")
+        st.balloons()
+        st.write("### Summary:")
+        st.write(f"**Location:** {place}")
+        st.write(f"**Services Rated:** {ratings}")
+        if refer == "Yes":
+            st.write(f"**Referral:** {referral_name} - {referral_phone}")
+else:
+    st.info("👆 Please select a package first")
+
         
