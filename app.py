@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
-
+import json
 st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
