@@ -2,28 +2,23 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
-import pandas as pd
 
-st.title("🎉 Event Services Feedback")
-st.write("Help us serve you better!")
+st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open("Event_Feedback").sheet1
-    return sheet
+    # We will use 2 sheets: "Bookings" and "Feedback"
+    sh = client.open("Event_Feedback")
+    booking_sheet = sh.worksheet("Bookings")
+    feedback_sheet = sh.worksheet("Feedback")
+    return booking_sheet, feedback_sheet
 
-# 2. BASIC INFO
-name = st.text_input("Your Name")
-phone = st.text_input("Your Phone Number")
-event_date = st.date_input("Event Date", date.today())
-place = st.text_input("📍 Location/Place of Event", "e.g. Kisumu, Milimani")
-company = st.text_input("Which company served you?", "Litunda Events")
+booking_sheet, feedback_sheet = connect_to_gsheet()
 
-# 3. FULL INVENTORY CATEGORIES
-st.subheader("1. What did you hire from us?")
+# INVENTORY LIST
 inventory = {
     "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
     "Visual Equipment": ["LED Screens", "Projector Screens", "LCD/Plasma Displays", "Backdrop Screens", "Interactive Touch Screens", "Mobile Screens"],
@@ -37,49 +32,74 @@ inventory = {
     "Technology Tools": ["Laptops", "Event Management Software", "Livestream Kits"]
 }
 
-selected_categories = st.multiselect("Select Categories you used", list(inventory.keys()))
+tab1, tab2 = st.tabs(["1. Make a Booking", "2. Submit Feedback"])
 
-ordered_items = []
-if selected_categories:
-    st.write("### Select specific items:")
-    for cat in selected_categories:
-        items = st.multiselect(f"{cat}", inventory[cat], key=cat)
-        ordered_items.extend(items)
+# ============= TAB 1: BOOKING =============
+with tab1:
+    st.header("Book Equipment & Services")
+    name = st.text_input("Your Name", key="b_name")
+    phone = st.text_input("Your Phone Number", key="b_phone")
+    event_date = st.date_input("Event Date", date.today(), key="b_date")
+    event_location = st.text_input("📍 Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc")
+    dispatch_location = st.text_input("🚚 Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc")
+    company = st.text_input("Preferred Company", "Litunda Events", key="b_comp")
 
-# 4. RATE + SAVE
-if ordered_items:
-    st.subheader("2. Rate the items you received")
+    st.subheader("What do you want to hire?")
+    selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="b_cat")
+    items_to_hire = []
+    if selected_categories:
+        for cat in selected_categories:
+            items = st.multiselect(f"{cat}", inventory[cat], key="b_"+cat)
+            items_to_hire.extend(items)
+    
+    notes = st.text_area("Additional Notes / Quantity needed")
+
+    if st.button("Send Booking Request"):
+        new_row = [
+            str(date.today()), name, phone, str(event_date), event_location, dispatch_location, company,
+            ", ".join(items_to_hire), notes
+        ]
+        booking_sheet.append_row(new_row)
+        st.success("✅ Booking request sent! We will call you with a quote within 2 hours.")
+        st.balloons()
+
+# ============= TAB 2: FEEDBACK =============
+with tab2:
+    st.header("Rate Your Past Event")
+    f_name = st.text_input("Your Name", key="f_name")
+    f_phone = st.text_input("Your Phone Number", key="f_phone")
+    f_event_date = st.date_input("Date of your Event", key="f_date")
+    
+    st.subheader("What did you hire from us?")
+    f_selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="f_cat")
+    items_used = []
+    if f_selected_categories:
+        for cat in f_selected_categories:
+            items = st.multiselect(f"{cat}", inventory[cat], key="f_"+cat)
+            items_used.extend(items)
+    
     ratings = {}
-    for item in ordered_items:
-        ratings[item] = st.slider(f"Rate {item}", 1, 5, 3, key=item)
-
+    if items_used:
+        st.subheader("Rate the items you received")
+        for item in items_used:
+            ratings[item] = st.slider(f"Rate {item}", 1, 5, 3, key="rate_"+item)
+    
     staff = st.slider("How was our staff?", 1, 5, 5)
     delivery = st.slider("How was delivery & setup?", 1, 5, 5)
     comments = st.text_area("Any comments or suggestions?")
-
-    # 5. REFERRAL SECTION
-    st.subheader("3. Refer a Friend 🤝")
-    refer = st.radio("Would you refer us to a friend?", ["Yes", "No", "Maybe"])
-    referral_name = ""
-    referral_phone = ""
+    
+    st.subheader("Refer a Friend 🤝")
+    refer = st.radio("Would you refer us?", ["Yes", "No", "Maybe"])
+    ref_name, ref_phone = "", ""
     if refer == "Yes":
-        referral_name = st.text_input("Friend's Name")
-        referral_phone = st.text_input("Friend's Phone Number")
+        ref_name = st.text_input("Friend's Name")
+        ref_phone = st.text_input("Friend's Phone Number")
 
     if st.button("Submit Feedback"):
-        try:
-            sheet = connect_to_gsheet()
-            new_row = [
-                str(date.today()), name, phone, str(event_date), place, company,
-                ", ".join(ordered_items), str(ratings), staff, delivery, comments,
-                refer, referral_name, referral_phone
-            ]
-            sheet.append_row(new_row)
-            st.success("✅ Thank you! Your feedback has been saved.")
-            st.balloons()
-        except Exception as e:
-            st.error(f"Error saving: {e}")
-else:
-    st.info("👆 Please select at least 1 category first")
-
-        
+        new_row = [
+            str(date.today()), f_name, f_phone, str(f_event_date),
+            ", ".join(items_used), str(ratings), staff, delivery, comments,
+            refer, ref_name, ref_phone
+        ]
+        feedback_sheet.append_row(new_row)
+        st.success("✅ Thank you! Your feedback has been saved.")
