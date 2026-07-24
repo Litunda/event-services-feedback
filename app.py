@@ -8,7 +8,11 @@ st.title("🎉 Event Services Portal")
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+     # Convert secrets to a dict and fix literal \n characters to real newlines
+    secret_dict = dict(st.secrets["gcp_service_account"])
+    secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
+
+    creds = Credentials.from_service_account_info(secret_dict, scopes=scope)
     client = gspread.authorize(creds)
     # We will use 2 sheets: "Bookings" and "Feedback"
     sh = client.open("Event_Feedback")
