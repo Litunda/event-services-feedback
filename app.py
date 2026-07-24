@@ -7,6 +7,7 @@ st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
+   def connect_to_gsheet():
     try:
         scope = [
             "https://www.googleapis.com/auth/spreadsheets",
@@ -23,9 +24,11 @@ def connect_to_gsheet():
         feedback_sheet = sh.worksheet("Feedback")
         return booking_sheet, feedback_sheet
         
-except Exception as e:
+    except Exception as e:
         st.error(f"Google Connection Failed: {e}")
         st.stop() # stops the app so we see the error
+
+booking_sheet, feedback_sheet = connect_to_gsheet()
 
 booking_sheet, feedback_sheet = connect_to_gsheet()
 
