@@ -6,7 +6,6 @@ import json
 st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
-def connect_to_gsheet():
    def connect_to_gsheet():
     try:
         scope = [
