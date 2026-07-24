@@ -7,14 +7,9 @@ st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
-scope = [
-      "https://spreadsheets.google.com/feeds",
-      "https://www.googleapis.com/auth/drive",
-  ]
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive",]
   # Directly pass the secrets dictionary since TOML handles the newlines natively now
-  creds = Credentials.from_service_account_info(
-      st.secrets["gcp_service_account"], scopes=scope
-  )
+  creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
   client = gspread.authorize(creds)
 
   sh = client.open("Event_Feedback")
