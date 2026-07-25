@@ -58,12 +58,11 @@ def notify_company_all(name, customer_email, event, phone):
     # 1. EMAIL
     try:
         subject = f"New Booking: {event}"
-body = f"""New Booking Received!
-
-Name: {name}
-Email: {customer_email}
-Phone: {phone}
-Event: {event}
+        body = f"""New Booking Received!
+        Name: {name}
+        Email: {customer_email}
+        Phone: {phone}
+        Event: {event}
 Submitted At: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 View Dashboard: {st.secrets.get('APP_URL', 'your-app-url')}
