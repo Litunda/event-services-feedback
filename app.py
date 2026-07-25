@@ -49,6 +49,63 @@ booking_sheet, feedback_sheet = connect_to_gsheet()
 
 booking_sheet, feedback_sheet = connect_to_gsheet()
 
+def notify_company_all(name, customer_email, event, phone=""):
+    """Sends Email + WhatsApp + SMS. Returns success count"""
+    success = 0
+    
+    # 1. EMAIL
+    try:
+        subject = f"🔔 New Booking: {event}"
+        body = f"""New Booking Received!
+
+Name: {name}
+Email: {customer_email} 
+Phone: {phone}
+Event: {event}
+Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+View Dashboard: {st.secrets.get('APP_URL', 'your-app-url')}"""
+        
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = ADMIN_EMAIL
+        
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_SENDER, ADMIN_EMAIL, msg.as_string())
+        success += 1
+    except Exception as e:
+        st.error(f"Email failed: {e}")
+
+    # 2. WHATSAPP
+    try:
+        url = f"https://api.ultramsg.com/{ULTRA_INSTANCE}/messages/chat"
+        payload = {
+            "token": ULTRA_TOKEN,
+            "to": COMPANY_WHATSAPP,
+            "body": f"🔔 *NEW BOOKING ALERT*\n\n👤 {name}\n📧 {customer_email}\n📅 {event}\n📞 {phone}"
+        }
+        requests.post(url, data=payload, timeout=5)
+        success += 1
+    except Exception as e:
+        st.error(f"WhatsApp failed: {e}")
+
+    # 3. SMS
+    try:
+        message = f"NEW BOOKING: {name} for {event}. Phone: {phone}. Check dashboard."
+        recipients = [COMPANY_PHONE]
+        response = sms.send(message, recipients)
+        if response['SMSMessageData']['Recipients'][0]['status'] == 'Success':
+            success += 1
+    except Exception as e:
+        st.error(f"SMS failed: {e}")
+    
+    if success > 0:
+        st.toast(f"✅ Company notified via {success}/3 channels", icon="🚀")
+    
+    return success
 # INVENTORY LIST
 inventory = {
     "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
