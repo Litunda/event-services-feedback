@@ -3,6 +3,24 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
 import json
+import smtplib
+from email.mine.text import MIMEText
+# --- LOAD SECRETS ---
+EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
+EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"] 
+ADMIN_EMAIL = st.secrets["ADMIN_EMAIL"]
+
+ULTRA_INSTANCE = st.secrets["ULTRA_INSTANCE"]
+ULTRA_TOKEN = st.secrets["ULTRA_TOKEN"]
+COMPANY_WHATSAPP = st.secrets["COMPANY_WHATSAPP"]
+
+AT_USERNAME = st.secrets["AT_USERNAME"]
+AT_API_KEY = st.secrets["AT_API_KEY"]
+COMPANY_PHONE = st.secrets["COMPANY_PHONE"] # "+2547XXXXXXXX"
+
+# Initialize Africa's Talking
+africastalking.initialize(AT_USERNAME, AT_API_KEY)
+sms = africastalking.SMS
 st.title("🎉 Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
