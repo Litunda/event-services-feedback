@@ -145,7 +145,7 @@ with tab1:
     notes = st.text_area("Additional Notes / Quantity needed")
 
 
-   if 'booking_sent' not in st.session_state:
+if 'booking_sent' not in st.session_state:
     st.session_state.booking_sent = False
 
 if st.button("Send Booking Request", key="b_submit", disabled=st.session_state.booking_sent):
