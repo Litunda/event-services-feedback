@@ -146,13 +146,16 @@ with tab1:
 
 
     if st.button("Send Booking Request", key="b_submit"):
+        #1. Save to sheet FIRST
         new_row = [
             str(date.today()), name, phone, customer_email, str(event_date), event_location, dispatch_location, company,
             ", ".join(items_to_hire), notes
         ]
         booking_sheet.append_row(new_row)
-        event_details = f"Date: {event_date}\nLocation: {event_location}\nItems: {', '.join(items_to_hire)}\nNotes: {notes}"
-    
+
+        #2. Send email, whatsapp, sms when button is clicked
+        #THIS IS WHAT GOES TO YOUR EMAIL, WHATSAPP, SMS
+        event_details = f"""Date: {event_date}, Location: {event_location}, Items: {', '.join(items_to_hire)}, Notes: {notes}"""
     notify_company_all(name, f"customer@email.com", str(event_date), phone)
     
     st.success("Booking request sent! We will call you soon")
