@@ -145,22 +145,36 @@ with tab1:
     notes = st.text_area("Additional Notes / Quantity needed")
 
 
-    if st.button("Send Booking Request", key="b_submit"):
-        #1. Save to sheet FIRST
-        new_row = [
-            str(date.today()), name, phone, customer_email, str(event_date), event_location, dispatch_location, company,
-            ", ".join(items_to_hire), notes
-        ]
-        booking_sheet.append_row(new_row)
+   if 'booking_sent' not in st.session_state:
+    st.session_state.booking_sent = False
 
-        #2. Send email, whatsapp, sms when button is clicked
-        #THIS IS WHAT GOES TO YOUR EMAIL, WHATSAPP, SMS
-        event_details = f"""Date: {event_date}, Location: {event_location}, Items: {', '.join(items_to_hire)}, Notes: {notes}"""
-    notify_company_all(name, f"customer@email.com", str(event_date), phone)
+if st.button("Send Booking Request", key="b_submit", disabled=st.session_state.booking_sent):
     
-    st.success("Booking request sent! We will call you soon")
+    st.session_state.booking_sent = True # LOCK IT
+    
+    # 1. SAVE TO SHEET
+    new_row = [
+        str(date.today()), name, phone, customer_email, str(event_date), 
+        event_location, dispatch_location, company, ", ".join(items_to_hire), notes
+    ]
+    booking_sheet.append_row(new_row)
+
+    # 2. BUILD MESSAGE
+    event_details = f"""Date: {event_date}
+Location: {event_location}
+Dispatch: {dispatch_location}
+Company: {company}
+Items Booked: {', '.join(items_to_hire)}
+Notes: {notes}"""
+    
+    # 3. SEND ONLY ONCE
+    notify_company_all(name, customer_email, event_details, phone)
+
+    st.success("✅ Booking request sent! We will call you soon")
     st.balloons()
-       
+    
+    st.session_state.booking_sent = False # UNLOCK for next booking
+    st.rerun() # Refresh the form
 # ============= TAB 2: FEEDBACK =============
 with tab2:
     st.header("Rate Your Past Event")
