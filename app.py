@@ -4,7 +4,7 @@ from google.oauth2.service_account import Credentials
 from datetime import date
 import json
 import smtplib
-from email.mine.text import MIMEText
+from email.mime.text import MIMEText
 # --- LOAD SECRETS ---
 EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"] 
