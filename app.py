@@ -51,13 +51,13 @@ booking_sheet, feedback_sheet = connect_to_gsheet()
 
 booking_sheet, feedback_sheet = connect_to_gsheet()
 
-def notify_company_all(name, customer_email, event, phone=""):
+def notify_company_all(name, customer_email, event, phone):
     """Sends Email + WhatsApp + SMS. Returns success count"""
     success = 0
     
     # 1. EMAIL
     try:
-        subject = f"🔔 New Booking: {event}"
+        subject = f"New Booking: {event}"
 body = f"""New Booking Received!
 
 Name: {name}
@@ -130,8 +130,9 @@ with tab1:
     name = st.text_input("Your Name", key="b_name")
     phone = st.text_input("Your Phone Number", key="b_phone")
     event_date = st.date_input("Event Date", date.today(), key="b_date")
-    event_location = st.text_input("📍 Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc")
-    dispatch_location = st.text_input("🚚 Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc")
+    customer_email = st.text_input("Your Email", key="b_email")
+    event_location = st.text_input("Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc")
+    dispatch_location = st.text_input("Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc")
     company = st.text_input("Preferred Company", "Litunda Events", key="b_comp")
 
     st.subheader("What do you want to hire?")
@@ -144,17 +145,18 @@ with tab1:
     
     notes = st.text_area("Additional Notes / Quantity needed")
 
-    if st.button("Send Booking Request"):
+
+    if st.button("Send Booking Request", key="b_submit"):
         new_row = [
-            str(date.today()), name, phone, str(event_date), event_location, dispatch_location, company,
+            str(date.today()), name, phone, customer_email, str(event_date), event_location, dispatch_location, company,
             ", ".join(items_to_hire), notes
         ]
         booking_sheet.append_row(new_row)
+        event_details = f"Date: {event_date}\nLocation: {event_location}\nItems: {', '.join(items_to_hire)}\nNotes: {notes}"
     
-    # ⬇️⬇️⬇️ ADD THIS LINE HERE ⬇️⬇️⬇️
     notify_company_all(name, f"customer@email.com", str(event_date), phone)
     
-    st.success("✅ Booking request sent! We will call you soon")  # LINE 151
+    st.success("Booking request sent! We will call you soon")
     st.balloons()
        
 # ============= TAB 2: FEEDBACK =============
@@ -182,7 +184,7 @@ with tab2:
     delivery = st.slider("How was delivery & setup?", 1, 5, 5)
     comments = st.text_area("Any comments or suggestions?")
     
-    st.subheader("Refer a Friend 🤝")
+    st.subheader("Refer a Friend ")
     refer = st.radio("Would you refer us?", ["Yes", "No", "Maybe"])
     ref_name, ref_phone = "", ""
     if refer == "Yes":
@@ -196,4 +198,4 @@ with tab2:
             refer, ref_name, ref_phone
         ]
         feedback_sheet.append_row(new_row)
-        st.success("✅ Thank you! Your feedback has been saved.")
+        st.success("Thank you! Your feedback has been saved.")
