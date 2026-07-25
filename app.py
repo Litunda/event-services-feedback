@@ -3,6 +3,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
 import json
+import datetime
+import requests
 import africastalking
 import smtplib
 from email.mime.text import MIMEText
