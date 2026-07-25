@@ -148,9 +148,19 @@ with tab1:
             ", ".join(items_to_hire), notes
         ]
         booking_sheet.append_row(new_row)
-        st.success("✅ Booking request sent! We will call you with a quote within 2 hours.")
-        st.balloons()
-
+      if st.button("Send Booking Request"):
+    new_row = [
+        str(date.today()), name, phone, str(event_date),
+        ", ".join(items_to_hire), notes
+    ]
+    booking_sheet.append_row(new_row)  # LINE 150 - SAVES TO SHEETS
+    
+    # ⬇️⬇️⬇️ ADD THIS LINE HERE ⬇️⬇️⬇️
+    notify_company_all(name, f"customer@email.com", str(event_date), phone)
+    
+    st.success("✅ Booking request sent! We will call you soon")  # LINE 151
+    st.balloons()
+       
 # ============= TAB 2: FEEDBACK =============
 with tab2:
     st.header("Rate Your Past Event")
