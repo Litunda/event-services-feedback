@@ -6,16 +6,16 @@ import secrets
 import smtplib
 from email.mime.text import MIMEText
 
-# --- 1. CONNECT TO GOOGLE SHEETS ONCE ---
+# ============= 1. CONNECT TO GOOGLE SHEETS =============
 @st.cache_resource
 def connect_to_gsheet():
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
-        sh = client.open("Event_Feedback")  # YOUR SHEET NAME
+        sh = client.open("Event_Feedback") # YOUR SHEET NAME
         companies_sheet = sh.worksheet("companies")
-        bookings_sheet = sh.worksheet("bookings_sheet") # MUST MATCH YOUR TAB NAME
+        bookings_sheet = sh.worksheet("bookings_sheet") # MUST MATCH YOUR TAB NAME EXACTLY
         return companies_sheet, bookings_sheet
     except Exception as e:
         st.error(f"Google Connection Failed: {e}")
@@ -23,12 +23,23 @@ def connect_to_gsheet():
 
 companies_sheet, bookings_sheet = connect_to_gsheet()
 
-# --- 2. SESSION STATE ---
+# ============= 2. SESSION STATE =============
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.is_admin = False
+    st.session_state.company_id = None
 
-# --- 3. HELPERS ---
+# ============= 3. INVENTORY LIST =============
+inventory = {
+    "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
+    "Visual Equipment": ["LED Screens", "Projectors", "LCD Screens", "Backdrop Screens"],
+    "Furniture & Setup": ["Chairs", "Tables", "Tents", "Podiums", "Stages"],
+    "Decoration Materials": ["Drapes", "Flowers", "Balloons", "Banners"],
+    "Catering Materials": ["Cutlery", "Crockery", "Serving Stations"],
+    "Power Supply": ["Generators", "Extension Cables"],
+}
+
+# ============= 4. HELPERS =============
 def send_approval_email(to_email, link, company_name):
     try:
         subject = f"Your {company_name} account is approved"
@@ -44,7 +55,7 @@ def send_approval_email(to_email, link, company_name):
     except Exception as e:
         st.error(f"Email failed: {e}")
 
-# --- 4. PAGES ---
+# ============= 5. PAGES =============
 def register_page():
     st.title("Register Your Hiring Company")
     with st.form("register_form"):
@@ -69,7 +80,8 @@ def admin_dashboard():
             st.write(f"**{comp['CompanyName']}** - {comp['LoginEmail']}")
             if st.button(f"Approve {comp['CompanyName']}", key=comp['CompanyID']):
                 token = secrets.token_urlsafe(16)
-                row = companies_sheet.get_all_records().index(comp) + 2
+                all_comps = companies_sheet.get_all_records()
+                row = all_comps.index(comp) + 2
                 companies_sheet.update_cell(row, 5, token) # temp_token
                 companies_sheet.update_cell(row, 6, "Approved") # status
                 link = f"{st.secrets['APP_URL']}?set_password={token}"
@@ -78,17 +90,19 @@ def admin_dashboard():
                 st.rerun()
 
     st.divider()
-    st.subheader("All Bookings + Feedback")
+    st.subheader("All Bookings")
     try:
         bookings = bookings_sheet.get_all_records()
         if bookings:
-            st.dataframe(bookings)
+            st.dataframe(bookings, use_container_width=True)
+            st.divider()
+            st.subheader("Manage Feedback")
             for i, b in enumerate(bookings):
-                with st.expander(f"{b.get('ClientName')} - {b.get('Service')}"):
+                with st.expander(f"{b.get('ClientName')} - {b.get('Service')} on {b.get('EventDate')}"):
                     new_fb = st.text_area("Edit Feedback", b.get('Feedback',''), key=f"fb{i}")
                     if st.button("Save Feedback", key=f"btn{i}"):
                         bookings_sheet.update_cell(i+2, 8, new_fb) # Col 8 = Feedback
-                        st.success("Updated!")
+                        st.success("Feedback Updated!")
                         st.rerun()
         else:
             st.info("No bookings yet.")
@@ -98,7 +112,10 @@ def admin_dashboard():
 def company_dashboard(company_id):
     st.title(f"Company Dashboard")
     my_bookings = [b for b in bookings_sheet.get_all_records() if b['CompanyID'] == company_id]
-    st.dataframe(my_bookings)
+    if my_bookings:
+        st.dataframe(my_bookings)
+    else:
+        st.info("No bookings for you yet")
     if st.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
@@ -112,43 +129,47 @@ def customer_booking_page():
         st.warning("No companies registered yet.")
         return
 
-    selected_name = st.selectbox("Select Company", [c['CompanyName'] for c in active_companies])
+    selected_name = st.selectbox("1. Select Company", [c['CompanyName'] for c in active_companies])
     selected_company = next(c for c in active_companies if c['CompanyName'] == selected_name)
 
+    st.subheader("2. Choose Items to Hire")
+    selected_categories = st.multiselect("Select Categories", list(inventory.keys()))
+    items_to_hire = []
+    if selected_categories:
+        for cat in selected_categories:
+            items = st.multiselect(f"Pick from {cat}", inventory[cat], key=cat)
+            items_to_hire.extend(items)
+    
+    st.subheader("3. Event Details")
     with st.form("booking_form"):
         name = st.text_input("Your Name")
         event_date = st.date_input("Event Date")
         venue = st.text_input("Venue")
-        service = st.selectbox("Item to Book", ["DJ", "Decor", "Catering", "MC", "Photography", "Sound"])
-        feedback = st.text_area("Additional Notes")
+        notes = st.text_area("Additional Notes / Quantity")
         submitted = st.form_submit_button("Send Booking Request")
         
         if submitted:
-            new_row = [
-                str(datetime.now()),
-                selected_company['CompanyName'],
-                name, 
-                str(event_date),
-                venue,
-                service,
-                "Pending",
-                feedback
-            ]
+            if not items_to_hire:
+                st.error("Please select at least 1 item")
+                return
+            service_text = ", ".join(items_to_hire) 
+            new_row = [str(datetime.now()), selected_company['CompanyName'], name, str(event_date), venue, service_text, "Pending", notes]
             bookings_sheet.append_row(new_row)
-            st.success(f"Booking request sent to {selected_company['CompanyName']}!")
+            st.success(f"✅ Booking sent to {selected_company['CompanyName']}!")
+            st.balloons()
 
 def login_page():
-    st.title("Company Login")
+    st.title("Login")
     if st.button("🔑 Login as Admin"):
         st.session_state.logged_in = True
         st.session_state.is_admin = True
         st.rerun()
     st.divider()
+    st.subheader("Company Login")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
 
-# --- 5. ROUTER ---
-query_params = st.query_params
+# ============= 6. ROUTER =============
 if st.session_state.get('logged_in'):
     if st.session_state.get('is_admin'):
         admin_dashboard()
