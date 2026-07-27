@@ -103,11 +103,10 @@ def register_page():
 # Checks if company ID or email already exists to prevent duplicates
 existing_companies = companies_sheet.get_all_records()
 email_exists = any(str(c.get('login_email', '')).strip().lower() == email.strip().lower() for c in existing_companies)
-        
- if email_exists:
-  st.error("An account with this login email already exists.")
- else:
-# Automatically saves as 'active' with the secure password provided
+    if email_exists:
+        st.error("An account with this login email already exists.")
+    else:
+        # Automatically saves as 'active' with the secure password provided
 new_row = [company_id, name, email, password, "", "active", "FALSE", admin_email, admin_wa]
 companies_sheet.append_row(new_row)
           st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
