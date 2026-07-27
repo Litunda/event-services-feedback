@@ -6,3 +6,6 @@ openpyxl
 africastalking
 requests
 google-auth
+Twilio
+oauth2client
+smtplib
