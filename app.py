@@ -66,14 +66,18 @@ def login_page():
     st.title("Company Login")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
+    
     if st.button("Login"):
-        comp = next((c for c in companies_sheet.get_all_records() if c['login_email'] == email), None)
-        if comp and comp['password'] == password and comp['status'] == "active":
+        companies = companies_sheet.get_all_records()
+        comp = next((c for c in companies if c['Email'] == email), None)
+        
+        if comp and comp['Password'] == password:
             st.session_state.logged_in = True
-            st.session_state.company_id = comp['company_id']
-            st.session_state.is_admin = comp['is_admin'] == "TRUE"
+            st.session_state.company_name = comp['CompanyName']
+            st.success(f"Welcome {comp['CompanyName']}!")
             st.rerun()
-        else: st.error("Wrong credentials or account not active")
+        else:
+            st.error("Invalid email or password")
 
 def admin_dashboard():
     st.title("Admin Dashboard")
