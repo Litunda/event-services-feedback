@@ -107,6 +107,9 @@ def company_dashboard(company_id):
 
 def customer_booking_page():
     st.title("Book a Service")
+    if not active_companies:
+    st.warning("No companies registered yet. Please register a company first.")
+    st.stop()
     active_companies = [c for c in companies_sheet.get_all_records() if c['status'] == "active"]
     selected_name = st.selectbox("Select Company", [c['company_name'] for c in active_companies])
     selected_company = next(c for c in active_companies if c['company_name'] == selected_name)
