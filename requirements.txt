@@ -5,6 +5,6 @@ gspread
 openpyxl
 africastalking
 requests
-google-auth
+google-auth==2.30.0
 twilio
 smtplib
