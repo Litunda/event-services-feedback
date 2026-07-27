@@ -69,9 +69,12 @@ def login_page():
     
     if st.button("Login"):
         companies = companies_sheet.get_all_records()
-        comp = next((c for c in companies if c['Email'] == email), None)
-        
-        if comp and comp['Password'] == password:
+        comp = None
+        for c in companies:
+            if str(c.get('Email','')).strip().lower() == email.strip().lower():
+                comp = c
+                break
+        if comp and str(comp.get('Password','')).strip() == password.strip():
             st.session_state.logged_in = True
             st.session_state.company_name = comp['CompanyName']
             st.success(f"Welcome {comp['CompanyName']}!")
