@@ -7,5 +7,4 @@ africastalking
 requests
 google-auth
 twilio
-google-auth-oauth2lib
 smtplib
