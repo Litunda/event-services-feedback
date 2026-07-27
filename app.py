@@ -93,14 +93,13 @@ def register_page():
     submitted = st.form_submit_button("Register & Activate Account")
     if submitted:
        if not name or not email or not password:
-        st.warning("Please fill out Company Name, Login Email, and Password.")
-      elif password != confirm_password:
-          
-        st.error("Passwords do not match. Please check and try again.")
-      elif len(password) < 6:
-        st.warning("Password must be at least 6 characters long for security.")
-      else:
-        company_id = name.lower().replace(" ", "_")
+            st.warning("Please fill out Company Name, Login Email, and Password.")
+        elif password != confirm_password:
+            st.error("Passwords do not match. Please check and try again.")
+        elif len(password) < 6:
+            st.warning("Password must be at least 6 characters long for security.")
+        else:
+            company_id = name.lower().replace(" ", "_")
 # Checks if company ID or email already exists to prevent duplicates
         existing_companies = companies_sheet.get_all_records()
         email_exists = any(str(c.get('login_email', '')).strip().lower() == email.strip().lower() for c in existing_companies)
