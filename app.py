@@ -79,11 +79,6 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 
 
 # --- PAGES ---
-The error **`NameError: name 'email' is not defined`** happens because the variable name used inside the check was slightly off compared to what the text input variable was named.
-
-To fix this immediately, replace your entire **`register_page`** function with this correct, fully tested version:
-
-```python
 def register_page():
   st.title("Register Your Hiring Company")
   st.info("Create your company account and set your secure password immediately.")
