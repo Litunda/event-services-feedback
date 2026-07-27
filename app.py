@@ -1,182 +1,394 @@
-import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime, date
+from datetime import date, datetime
 import secrets
 import smtplib
 from email.mime.text import MIMEText
+from google.oauth2.service_account import Credentials
+import gspread
+import streamlit as str_lit
 
-# ============= 1. CONNECT TO GOOGLE SHEETS =============
-@st.cache_resource
-def connect_to_gsheet():
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open("Event_Feedback") # YOUR SHEET NAME
-        companies_sheet = sh.worksheet("companies")
-        bookings_sheet = sh.worksheet("bookings_sheet") # MUST MATCH YOUR TAB NAME EXACTLY
-        return companies_sheet, bookings_sheet
-    except Exception as e:
-        st.error(f"Google Connection Failed: {e}")
-        st.stop()
+# --- GOOGLE SHEETS SETUP ---
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+]
+creds = Credentials.from_service_account_info(
+    str_lit.secrets["gcp_service_account"], scopes=scope
+)
+client = gspread.authorize(creds)
+sheet = client.open("Event_Feedback")
+companies_sheet = sheet.worksheet("companies")
+bookings_sheet = sheet.worksheet("bookings_sheet")
+feedback_sheet = sheet.worksheet("Feedback")
 
-companies_sheet, bookings_sheet = connect_to_gsheet()
+# --- SESSION STATE ---
+if "logged_in" not in str_lit.session_state:
+  str_lit.session_state.logged_in = False
+if "booking_sent" not in str_lit.session_state:
+  str_lit.session_state.booking_sent = False
 
-# ============= 2. SESSION STATE =============
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.is_admin = False
-    st.session_state.company_id = None
 
-# ============= 3. INVENTORY LIST =============
-inventory = {
-    "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
-    "Visual Equipment": ["LED Screens", "Projectors", "LCD Screens", "Backdrop Screens"],
-    "Furniture & Setup": ["Chairs", "Tables", "Tents", "Podiums", "Stages"],
-    "Decoration Materials": ["Drapes", "Flowers", "Balloons", "Banners"],
-    "Catering Materials": ["Cutlery", "Crockery", "Serving Stations"],
-    "Power Supply": ["Generators", "Extension Cables"],
-}
-
-# ============= 4. HELPERS =============
+# --- HELPERS ---
 def send_approval_email(to_email, link, company_name):
-    try:
-        subject = f"Your {company_name} account is approved"
-        body = f"Hi {company_name},\n\nYour account is approved. Click here to set your password:\n{link}"
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['From'] = st.secrets["EMAIL_SENDER"]
-        msg['To'] = to_email
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(st.secrets["EMAIL_SENDER"], st.secrets["EMAIL_PASSWORD"])
-            server.sendmail(st.secrets["EMAIL_SENDER"], to_email, msg.as_string())
-    except Exception as e:
-        st.error(f"Email failed: {e}")
+  subject = f"Your {company_name} account is approved"
+  body = (
+      f"Hi {company_name},\n\nYour account is approved. Click here to set your"
+      f" password:\n{link}"
+  )
+  msg = MIMEText(body)
+  msg["Subject"] = subject
+  msg["From"] = str_lit.secrets["EMAIL_SENDER"]
+  msg["To"] = to_email
+  with smtplib.SMTP("smtp.gmail.com", 587) as server:
+    server.starttls()
+    server.login(
+        str_lit.secrets["EMAIL_SENDER"], str_lit.secrets["EMAIL_PASSWORD"]
+    )
+    server.sendmail(str_lit.secrets["EMAIL_SENDER"], to_email, msg.as_string())
 
-# ============= 5. PAGES =============
+
+def notify_company_all(name, customer_email, event_details, phone):
+  """Sends Email + WhatsApp notifications."""
+  success = 0
+
+  # 1. EMAIL
+  try:
+    subject = f"New Booking: {name}"
+    body = f"""New Booking Received!
+    Name: {name}
+    Email: {customer_email}
+    Phone: {phone}
+    Details:
+    {event_details}
+    Submitted At: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+    View Dashboard: {str_lit.secrets.get('APP_URL', 'your-app-url')}
+    """
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = str_lit.secrets["EMAIL_SENDER"]
+    msg["To"] = str_lit.secrets["ADMIN_EMAIL"]
+
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+      server.starttls()
+      server.login(
+          str_lit.secrets["EMAIL_SENDER"], str_lit.secrets["EMAIL_PASSWORD"]
+      )
+      server.sendmail(
+          str_lit.secrets["EMAIL_SENDER"], str_lit.secrets["ADMIN_EMAIL"], msg.as_string()
+      )
+    success += 1
+  except Exception as e:
+    str_lit.error(f"Email failed: {e}")
+
+  # 2. WHATSAPP
+  try:
+    import requests
+
+    url = (
+        f"https://api.ultramsg.com/{str_lit.secrets['ULTRA_INSTANCE']}/messages/chat"
+    )
+    payload = {
+        "token": str_lit.secrets["ULTRA_TOKEN"],
+        "to": str_lit.secrets["COMPANY_WHATSAPP"],
+        "body": (
+            f"🔔 NEW BOOKING ALERT\n\n👤 {name}\n📧 {customer_email}\n📅"
+            f" {event_details}\n📞 {phone}"
+        ),
+    }
+    requests.post(url, data=payload, timeout=5)
+    success += 1
+  except Exception as e:
+    str_lit.error(f"WhatsApp failed: {e}")
+
+  if success > 0:
+    str_lit.toast(f"Company notified via {success} channels", icon="🚀")
+
+  return success
+
+
+# --- PAGES ---
 def register_page():
-    st.title("Register Your Hiring Company")
-    with st.form("register_form"):
-        name = st.text_input("Company Name")
-        email = st.text_input("Company Login Email")
-        admin_email = st.text_input("Email to receive bookings")
-        admin_wa = st.text_input("WhatsApp to receive bookings e.g. whatsapp:+2547...")
-        submitted = st.form_submit_button("Submit Application")
-        if submitted:
-            company_id = name.lower().replace(" ", "_")
-            new_row = [company_id, name, email, "", "", "Pending", "FALSE", admin_email, admin_wa]
-            companies_sheet.append_row(new_row)
-            st.success("Application submitted! We'll review and email you within 24hrs.")
+  str_lit.title("Register Your Hiring Company")
+  with str_lit.form("register_form"):
+    name = str_lit.text_input("Company Name")
+    email = str_lit.text_input("Company Login Email")
+    admin_email = str_lit.text_input("Email to receive bookings")
+    admin_wa = str_lit.text_input("WhatsApp to receive bookings e.g. whatsapp:+2547...")
+    submitted = str_lit.form_submit_button("Submit Application")
+    if submitted:
+      company_id = name.lower().replace(" ", "_")
+      new_row = [
+          company_id,
+          name,
+          email,
+          "",
+          "",
+          "pending",
+          "FALSE",
+          admin_email,
+          admin_wa,
+      ]
+      companies_sheet.append_row(new_row)
+      str_lit.success("Application submitted! We'll review and email you within 24hrs.")
 
-def admin_dashboard():
-    st.title("🔑 Admin Dashboard")
-    st.subheader("Pending Applications")
-    pending = [c for c in companies_sheet.get_all_records() if str(c.get('Status','')).strip().lower() == 'pending']
-    
-    for comp in pending:
-        with st.container(border=True):
-            st.write(f"**{comp['CompanyName']}** - {comp['LoginEmail']}")
-            if st.button(f"Approve {comp['CompanyName']}", key=comp['CompanyID']):
-                token = secrets.token_urlsafe(16)
-                all_comps = companies_sheet.get_all_records()
-                row = all_comps.index(comp) + 2
-                companies_sheet.update_cell(row, 5, token) # temp_token
-                companies_sheet.update_cell(row, 6, "Approved") # status
-                link = f"{st.secrets['APP_URL']}?set_password={token}"
-                send_approval_email(comp['LoginEmail'], link, comp['CompanyName'])
-                st.success(f"Approved! Invite sent")
-                st.rerun()
 
-    st.divider()
-    st.subheader("All Bookings")
-    try:
-        bookings = bookings_sheet.get_all_records()
-        if bookings:
-            st.dataframe(bookings, use_container_width=True)
-            st.divider()
-            st.subheader("Manage Feedback")
-            for i, b in enumerate(bookings):
-                with st.expander(f"{b.get('ClientName')} - {b.get('Service')} on {b.get('EventDate')}"):
-                    new_fb = st.text_area("Edit Feedback", b.get('Feedback',''), key=f"fb{i}")
-                    if st.button("Save Feedback", key=f"btn{i}"):
-                        bookings_sheet.update_cell(i+2, 8, new_fb) # Col 8 = Feedback
-                        st.success("Feedback Updated!")
-                        st.rerun()
-        else:
-            st.info("No bookings yet.")
-    except Exception as e:
-        st.error(f"Bookings Error: {e}")
+def set_password_page(token):
+  str_lit.title("Set Your Password")
+  all_companies = companies_sheet.get_all_records()
+  company = next((c for c in all_companies if c["temp_token"] == token), None)
+  if not company:
+    str_lit.error("Invalid link")
+    return
 
-def company_dashboard(company_id):
-    st.title(f"Company Dashboard")
-    my_bookings = [b for b in bookings_sheet.get_all_records() if b['CompanyID'] == company_id]
-    if my_bookings:
-        st.dataframe(my_bookings)
-    else:
-        st.info("No bookings for you yet")
-    if st.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
+  p1 = str_lit.text_input("New Password", type="password")
+  if str_lit.button("Activate Account"):
+    row = all_companies.index(company) + 2
+    companies_sheet.update_cell(row, 4, p1)  # password
+    companies_sheet.update_cell(row, 5, "")  # clear token
+    companies_sheet.update_cell(row, 6, "active")  # status
+    str_lit.success("Account Activated! Go to Company Login tab.")
 
-def customer_booking_page():
-    st.title("Book a Service")
-    all_companies = companies_sheet.get_all_records()
-    active_companies = [c for c in all_companies if c.get('Status', '').lower() == 'active']
-
-    if not active_companies:
-        st.warning("No companies registered yet.")
-        return
-
-    selected_name = st.selectbox("1. Select Company", [c['CompanyName'] for c in active_companies])
-    selected_company = next(c for c in active_companies if c['CompanyName'] == selected_name)
-
-    st.subheader("2. Choose Items to Hire")
-    selected_categories = st.multiselect("Select Categories", list(inventory.keys()))
-    items_to_hire = []
-    if selected_categories:
-        for cat in selected_categories:
-            items = st.multiselect(f"Pick from {cat}", inventory[cat], key=cat)
-            items_to_hire.extend(items)
-    
-    st.subheader("3. Event Details")
-    with st.form("booking_form"):
-        name = st.text_input("Your Name")
-        event_date = st.date_input("Event Date")
-        venue = st.text_input("Venue")
-        notes = st.text_area("Additional Notes / Quantity")
-        submitted = st.form_submit_button("Send Booking Request")
-        
-        if submitted:
-            if not items_to_hire:
-                st.error("Please select at least 1 item")
-                return
-            service_text = ", ".join(items_to_hire) 
-            new_row = [str(datetime.now()), selected_company['CompanyName'], name, str(event_date), venue, service_text, "Pending", notes]
-            bookings_sheet.append_row(new_row)
-            st.success(f"✅ Booking sent to {selected_company['CompanyName']}!")
-            st.balloons()
 
 def login_page():
-    st.title("Login")
-    if st.button("🔑 Login as Admin"):
-        st.session_state.logged_in = True
-        st.session_state.is_admin = True
-        st.rerun()
-    st.divider()
-    st.subheader("Company Login")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+  str_lit.title("Company Login")
 
-# ============= 6. ROUTER =============
-if st.session_state.get('logged_in'):
-    if st.session_state.get('is_admin'):
-        admin_dashboard()
+  # ADMIN BYPASS
+  if str_lit.button("🔑 Login as Admin"):
+    str_lit.session_state.logged_in = True
+    str_lit.session_state.company_name = "Admin"
+    str_lit.session_state.is_admin = True
+    str_lit.success("Logged in as Admin")
+    str_lit.rerun()
+
+  str_lit.divider()
+  str_lit.subheader("Company Login")
+
+  email = str_lit.text_input("Email")
+  password = str_lit.text_input("Password", type="password")
+
+
+def admin_dashboard():
+  str_lit.title("Admin Dashboard")
+  str_lit.subheader("Pending Applications")
+  pending = [
+      c
+      for c in companies_sheet.get_all_records()
+      if str(c.get("Status", "")).strip().lower() == "pending"
+  ]
+
+  for comp in pending:
+    with str_lit.container(border=True):
+      str_lit.write(f"*{comp['company_name']}* - {comp['login_email']}")
+      if str_lit.button(f"Approve {comp['company_name']}", key=comp["company_id"]):
+        token = secrets.token_urlsafe(16)
+        row = companies_sheet.get_all_records().index(comp) + 2
+        companies_sheet.update_cell(row, 5, token)  # temp_token
+        companies_sheet.update_cell(row, 6, "approved")  # status
+        link = f"{str_lit.secrets['APP_URL']}?set_password={token}"
+        send_approval_email(comp["login_email"], link, comp["company_name"])
+        str_lit.success(f"Approved! Invite sent to {comp['login_email']}")
+        str_lit.rerun()
+
+  str_lit.divider()
+  str_lit.subheader("All Bookings")
+
+  try:
+    bookings = bookings_sheet.get_all_records()
+    if bookings:
+      str_lit.dataframe(bookings)
     else:
-        company_dashboard(st.session_state.company_id)
+      str_lit.info("No bookings yet.")
+  except Exception as e:
+    str_lit.error(f"Bookings Sheet Error: {e}")
+
+
+def company_dashboard(company_id):
+  str_lit.title("Dashboard")
+  my_bookings = [
+      b for b in bookings_sheet.get_all_records() if b["company_id"] == company_id
+  ]
+  str_lit.dataframe(my_bookings)
+  if str_lit.button("Logout"):
+    str_lit.session_state.logged_in = False
+    str_lit.rerun()
+
+
+# INVENTORY LIST
+inventory = {
+    "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
+    "Visual Equipment": [
+        "LED Screens",
+        "Projector Screens",
+        "LCD/Plasma Displays",
+        "Backdrop Screens",
+        "Interactive Touch Screens",
+        "Mobile Screens",
+    ],
+    "Furniture & Setup": ["Chairs", "Tables", "Tents", "Podiums", "Stages"],
+    "Decoration Materials": [
+        "Drapes",
+        "Flowers",
+        "Balloons",
+        "Banners",
+        "Branding Props",
+    ],
+    "Catering Materials": [
+        "Cutlery",
+        "Crockery",
+        "Serving Stations",
+        "Food Storage Units",
+    ],
+    "Stationery & Print": ["Invitations", "Programs", "Signage", "Name Tags"],
+    "Transport Vehicles": ["Vans", "Trucks", "Cars"],
+    "Safety Gear": [
+        "Fire Extinguishers",
+        "First Aid Kits",
+        "Barriers",
+        "Uniforms",
+    ],
+    "Power Supply": ["Generators", "Extension Cables", "Backup Batteries"],
+    "Technology Tools": [
+        "Laptops",
+        "Event Management Software",
+        "Livestream Kits",
+    ],
+}
+
+
+def customer_booking_page():
+  str_lit.title("Book Equipment & Services")
+  name = str_lit.text_input("Your Name", key="b_name")
+  phone = str_lit.text_input("Your Phone Number", key="b_phone")
+  event_date = str_lit.date_input("Event Service Date", date.today(), key="b_date")
+  customer_email = str_lit.text_input("Your Email", key="b_email")
+  event_location = str_lit.text_input(
+      "Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc"
+  )
+  dispatch_location = str_lit.text_input(
+      "Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc"
+  )
+  company = str_lit.text_input(
+      "Preferred Company", "According to the service offered", key="b_comp"
+  )
+
+  str_lit.subheader("What do you want to hire?")
+  selected_categories = str_lit.multiselect(
+      "Select Categories", list(inventory.keys()), key="b_cat"
+  )
+  items_to_hire = []
+  if selected_categories:
+    for cat in selected_categories:
+      items = str_lit.multiselect(f"{cat}", inventory[cat], key="b_" + cat)
+      items_to_hire.extend(items)
+
+  notes = str_lit.text_area("Additional Notes / Quantity needed")
+
+  if str_lit.button(
+      "Send Booking Request",
+      key="b_submit",
+      disabled=str_lit.session_state.booking_sent,
+  ):
+    str_lit.session_state.booking_sent = True
+
+    new_row = [
+        str(date.today()),
+        name,
+        phone,
+        customer_email,
+        str(event_date),
+        event_location,
+        dispatch_location,
+        company,
+        ", ".join(items_to_hire),
+        notes,
+    ]
+    bookings_sheet.append_row(new_row)
+
+    event_details = f"""Date: {event_date}
+Location: {event_location}
+Dispatch: {dispatch_location}
+Company: {company}
+Items Booked: {', '.join(items_to_hire)}
+Notes: {notes}"""
+
+    notify_company_all(name, customer_email, event_details, phone)
+
+    str_lit.success("✅ Booking request sent! We will call you soon")
+    str_lit.balloons()
+    str_lit.session_state.booking_sent = False
+    str_lit.rerun()
+
+
+def feedback_page():
+  str_lit.title("Rate Your Past Event")
+  f_name = str_lit.text_input("Your Name", key="f_name")
+  f_phone = str_lit.text_input("Your Phone Number", key="f_phone")
+  f_event_date = str_lit.date_input("Date of your Event", key="f_date")
+
+  str_lit.subheader("What did you hire from us?")
+  f_selected_categories = str_lit.multiselect(
+      "Select Categories", list(inventory.keys()), key="f_cat"
+  )
+  items_used = []
+  if f_selected_categories:
+    for cat in f_selected_categories:
+      items = str_lit.multiselect(f"{cat}", inventory[cat], key="f_" + cat)
+      items_used.extend(items)
+
+  ratings = {}
+  if items_used:
+    str_lit.subheader("Rate the items you received")
+    for item in items_used:
+      ratings[item] = str_lit.slider(f"Rate {item}", 1, 5, 3, key="rate_" + item)
+
+  staff = str_lit.slider("How was our staff?", 1, 5, 5)
+  delivery = str_lit.slider("How was delivery & setup?", 1, 5, 5)
+  comments = str_lit.text_area("Any comments or suggestions?")
+
+  str_lit.subheader("Refer a Friend ")
+  refer = str_lit.radio("Would you refer us?", ["Yes", "No", "Maybe"])
+  ref_name, ref_phone = "", ""
+  if refer == "Yes":
+    ref_name = str_lit.text_input("Friend's Name")
+    ref_phone = str_lit.text_input("Friend's Phone Number")
+
+  if str_lit.button("Submit Feedback"):
+    new_row = [
+        str(date.today()),
+        f_name,
+        f_phone,
+        str(f_event_date),
+        ", ".join(items_used),
+        str(ratings),
+        staff,
+        delivery,
+        comments,
+        refer,
+        ref_name,
+        ref_phone,
+    ]
+    feedback_sheet.append_row(new_row)
+    str_lit.success("Thank you! Your feedback has been saved.")
+
+
+# --- ROUTER ---
+query_params = str_lit.query_params
+if "set_password" in query_params:
+  set_password_page(query_params["set_password"])
+elif str_lit.session_state.get("logged_in"):
+  if str_lit.session_state.get("is_admin"):
+    admin_dashboard()
+  else:
+    company_dashboard(str_lit.session_state.company_id)
 else:
-    tab1, tab2, tab3 = st.tabs(["Book Service", "Company Register", "Company Login"])
-    with tab1: customer_booking_page()
-    with tab2: register_page()
-    with tab3: login_page()
+  tab1, tab2, tab3, tab4 = str_lit.tabs(
+      ["Make a Booking", "Submit Feedback", "Company Register", "Company Login"]
+  )
+  with tab1:
+    customer_booking_page()
+  with tab2:
+    feedback_page()
+  with tab3:
+    register_page()
+  with tab4:
+    login_page()
