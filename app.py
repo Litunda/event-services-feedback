@@ -329,6 +329,43 @@ Notes: {notes}"""
       st.balloons()
       st.session_state.booking_sent = False
 
+def customer_dashboard_page():
+  st.title("My Customer Portal")
+  st.info("Enter your phone number or email to track your bookings and view your history.")
+
+  lookup_val = st.text_input("Enter your Phone Number or Email").strip().lower()
+
+  if lookup_val:
+    # 1. Fetch and Filter Customer Bookings
+    try:
+      all_bookings = bookings_sheet.get_all_records()
+      customer_bookings = [
+          b for b in all_bookings 
+          if lookup_val in str(b.get('phone', '')).lower() or lookup_val in str(b.get('customer_email', '')).lower()
+      ]
+
+      st.subheader("Your Booking Requests")
+      if customer_bookings:
+        st.dataframe(customer_bookings)
+      else:
+        st.info("No bookings found matching that phone number or email.")
+    except Exception as e:
+      st.error(f"Error loading bookings: {e}")
+
+    # 2. Fetch and Filter Customer Feedback
+    try:
+      all_feedback = feedback_sheet.get_all_records()
+      customer_feedback = [
+          f for f in all_feedback 
+          if lookup_val in str(f.get('f_phone', '')).lower() or lookup_val in str(f.get('f_name', '')).lower()
+      ]
+
+      if customer_feedback:
+        st.subheader("Your Past Feedback Submissions")
+        st.dataframe(customer_feedback)
+    except Exception as e:
+      pass
+
 
 def feedback_page():
   st.title("Rate Your Past Event")
@@ -376,19 +413,27 @@ query_params = st.query_params
 if "set_password" in query_params:
   set_password_page(query_params["set_password"])
 elif st.session_state.get('logged_in'):
-  # Show Dashboard if logged in as Admin or Company Partner
+  # Show Dashboard ONLY if logged in as Admin or Company Partner
   if st.session_state.get('is_admin'):
     admin_dashboard()
   else:
     company_dashboard(st.session_state.company_id, st.session_state.company_name)
 else:
-  # Public tabs for customers and new company partners wanting to join/login
-  tab1, tab2, tab3, tab4 = st.tabs(["Make a Booking", "Submit Feedback", "Register Company", "Company Login"])
+  # Public tabs for customers (No login required for these)
+  tab1, tab2, tab3, tab4, tab5 = st.tabs([
+      "Make a Booking", 
+      "Track My Bookings", 
+      "Submit Feedback", 
+      "Register Company", 
+      "Company Login"
+  ])
   with tab1:
     customer_booking_page()
   with tab2:
-    feedback_page()
+    customer_dashboard_page()
   with tab3:
-    register_page()
+    feedback_page()
   with tab4:
+    register_page()
+  with tab5:
     login_page()
