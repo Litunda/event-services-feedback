@@ -78,25 +78,6 @@ def login_page():
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")        
 
-def login_page():
-    st.title("Company Login")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-    
-    if st.button("Login"):
-        companies = companies_sheet.get_all_records()
-        comp = None
-        for c in companies:
-            if str(c.get('Email','')).strip().lower() == email.strip().lower():
-                comp = c
-                break
-        if comp and str(comp.get('Password','')).strip() == password.strip():
-            st.session_state.logged_in = True
-            st.session_state.company_name = comp['CompanyName']
-            st.success(f"Welcome {comp['CompanyName']}!")
-            st.rerun()
-        else:
-            st.error("Invalid email or password")
 
 def admin_dashboard():
     st.title("Admin Dashboard")
