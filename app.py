@@ -108,9 +108,17 @@ def admin_dashboard():
                 st.rerun()
 
     st.divider()
-    st.subheader("All Bookings")
-    st.dataframe(bookings_sheet.get_all_records())
+st.subheader("All Bookings")
 
+try:
+    bookings = bookings_sheet.get_all_records()
+    if bookings:
+        st.dataframe(bookings)
+    else:
+        st.info("No bookings yet. Add 1 row in Google Sheets to test.")
+except Exception as e:
+    st.error(f"Bookings Sheet Error: {e}")
+    st.warning("Go to Google Sheets > 'bookings' tab > Row 1. Make sure there are 8 headers, no blanks, no duplicates")
 def company_dashboard(company_id):
     st.title(f"Dashboard")
     my_bookings = [b for b in bookings_sheet.get_all_records() if b['company_id'] == company_id]
