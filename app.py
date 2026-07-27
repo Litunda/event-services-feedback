@@ -160,10 +160,8 @@ AT_USERNAME = st.secrets["AT_USERNAME"]
 AT_API_KEY = st.secrets["AT_API_KEY"]
 COMPANY_PHONE = st.secrets["COMPANY_PHONE"] # "+2547XXXXXXXX"
 
-# Initialize Africa's Talking
-africastalking.initialize(AT_USERNAME, AT_API_KEY)
-sms = africastalking.SMS
-st.title("Event Services Portal")
+# africastalking.initialize(AT_USERNAME, AT_API_KEY)
+st.sidebar.info("SMS notifications disabled")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
