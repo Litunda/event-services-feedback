@@ -61,6 +61,22 @@ def set_password_page(token):
         companies_sheet.update_cell(row, 5, "") # clear token
         companies_sheet.update_cell(row, 6, "active") # status
         st.success("Account Activated! Go to Company Login tab.")
+def login_page():
+    st.title("Company Login")
+
+    # ADMIN BYPASS
+    if st.button("🔑 Login as Admin"):
+        st.session_state.logged_in = True
+        st.session_state.company_name = "Admin"
+        st.session_state.is_admin = True
+        st.success("Logged in as Admin")
+        st.rerun()
+
+    st.divider() # adds a line
+    st.subheader("Company Login")
+    
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")        
 
 def login_page():
     st.title("Company Login")
