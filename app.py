@@ -7,6 +7,45 @@ import requests
 import africastalking
 import smtplib
 from email.mime.text import MIMEText
+# CHECK URL FIRST: Are they clicking a "set password" link?
+query_params = st.query_params
+if "set_password" in query_params:
+    set_password_page(query_params["set_password"])
+    st.stop()
+
+# 1. LOGIN PAGE
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.company_id = None
+
+def login():
+    st.title("Company Login")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        company = companies_sheet.find(email) # check companies sheet
+        if company and password == company['password']:
+            st.session_state.logged_in = True
+            st.session_state.company_id = company['company_id']
+            st.rerun()
+        else:
+            st.error("Wrong credentials")
+
+if not st.session_state.logged_in:
+    login()
+    st.stop() # Stop everything else until they login
+
+# 2. FILTER BOOKINGS
+company_id = st.session_state.company_id
+all_bookings = booking_sheet.get_all_records()
+my_bookings = [b for b in all_bookings if b['company_id'] == company_id]
+st.dataframe(my_bookings) # Company only sees their own
+
+# 3. SEND NOTIFICATIONS TO COMPANY
+company_data = get_company_data(company_id)
+notify_company_all(name, customer_email, event_details, phone, 
+                   company_data['admin_email'], 
+                   company_data['admin_whatsapp'])
 # --- LOAD SECRETS ---
 EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"] 
@@ -23,7 +62,7 @@ COMPANY_PHONE = st.secrets["COMPANY_PHONE"] # "+2547XXXXXXXX"
 # Initialize Africa's Talking
 africastalking.initialize(AT_USERNAME, AT_API_KEY)
 sms = africastalking.SMS
-st.title("🎉 Event Services Portal")
+st.title("Event Services Portal")
 
 # 1. CONNECT TO GOOGLE SHEETS
 def connect_to_gsheet():
@@ -105,7 +144,7 @@ View Dashboard: {st.secrets.get('APP_URL', 'your-app-url')}
         st.error(f"SMS failed: {e}")
     
     if success > 0:
-        st.toast(f"✅ Company notified via {success}/3 channels", icon="🚀")
+        st.toast(f"Company notified via {success}/3 channels", icon="🚀")
     
     return success
 # INVENTORY LIST
@@ -116,7 +155,7 @@ inventory = {
     "Decoration Materials": ["Drapes", "Flowers", "Balloons", "Banners", "Branding Props"],
     "Catering Materials": ["Cutlery", "Crockery", "Serving Stations", "Food Storage Units"],
     "Stationery & Print": ["Invitations", "Programs", "Signage", "Name Tags"],
-    "Transport Vehicles": ["Vans", "Trucks", "Buses"],
+    "Transport Vehicles": ["Vans", "Trucks", "Cars"],
     "Safety Gear": ["Fire Extinguishers", "First Aid Kits", "Barriers", "Uniforms"],
     "Power Supply": ["Generators", "Extension Cables", "Backup Batteries"],
     "Technology Tools": ["Laptops", "Event Management Software", "Livestream Kits"]
@@ -129,11 +168,11 @@ with tab1:
     st.header("Book Equipment & Services")
     name = st.text_input("Your Name", key="b_name")
     phone = st.text_input("Your Phone Number", key="b_phone")
-    event_date = st.date_input("Event Date", date.today(), key="b_date")
+    event_date = st.date_input("Event Service Date", date.today(), key="b_date")
     customer_email = st.text_input("Your Email", key="b_email")
     event_location = st.text_input("Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc")
     dispatch_location = st.text_input("Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc")
-    company = st.text_input("Preferred Company", "Litunda Events", key="b_comp")
+    company = st.text_input("Preferred Company", "According to the service offered", key="b_comp")
 
     st.subheader("What do you want to hire?")
     selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="b_cat")
