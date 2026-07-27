@@ -139,11 +139,15 @@ def login_page():
 
   if st.button("Login"):
     all_companies = companies_sheet.get_all_records()
+ # --- DEBUG HELPER (Remove after fixing) ---
+    with st.expander("🔍 Click here to view sheet debugging data"):
+      st.write("Fetched Companies from Sheet:", all_companies)
+    # ------------------------------------------
+
     matched_company = next(
-        (c for c in all_companies if c.get('login_email') == email and c.get('password') == password),
+        (c for c in all_companies if str(c.get('login_email', '')).strip().lower() == email.strip().lower() and str(c.get('password', '')) == password),
         None
     )
-
     if matched_company:
       if str(matched_company.get('Status')).lower() != "active":
         st.warning("Your account is pending review or inactive.")
