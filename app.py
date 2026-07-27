@@ -81,23 +81,36 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 # --- PAGES ---
 def register_page():
   st.title("Register Your Hiring Company")
+  st.info("Create your company account and set your secure password immediately.")
+  
   with st.form("register_form"):
     name = st.text_input("Company Name")
     email = st.text_input("Company Login Email")
+    password = st.text_input("Choose Password", type="password")
+    confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
     admin_wa = st.text_input("WhatsApp to receive bookings (e.g., +2547...)")
-    submitted = st.form_submit_button("Submit Application")
-    
+    submitted = st.form_submit_button("Register & Activate Account")
     if submitted:
-      if not name or not email:
-        st.warning("Please fill out your Company Name and Email.")
+       if not name or not email or not password:
+        st.warning("Please fill out Company Name, Login Email, and Password.")
+      elif password != confirm_password:
+        st.error("Passwords do not match. Please check and try again.")
+      elif len(password) < 6:
+        st.warning("Password must be at least 6 characters long for security.")
       else:
         company_id = name.lower().replace(" ", "_")
-        new_row = [company_id, name, email, "", "", "pending", "FALSE", admin_email, admin_wa]
-        companies_sheet.append_row(new_row)
-        st.success("Application submitted! We'll review and email you within 24hrs.")
-
-
+# Checks if company ID or email already exists to prevent duplicates
+        existing_companies = companies_sheet.get_all_records()
+        email_exists = any(str(c.get('login_email', '')).strip().lower() == email.strip().lower() for c in existing_companies)
+        
+        if email_exists:
+          st.error("An account with this login email already exists.")
+        else:
+          # Automatically saves as 'active' with the secure password provided
+          new_row = [company_id, name, email, password, "", "active", "FALSE", admin_email, admin_wa]
+          companies_sheet.append_row(new_row)
+          st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
 def set_password_page(token):
   st.title("Set Your Password")
   all_companies = companies_sheet.get_all_records()
