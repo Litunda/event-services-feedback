@@ -106,15 +106,21 @@ def company_dashboard(company_id):
         st.rerun()
 
 def customer_booking_page():
+   def customer_booking_page():
     st.title("Book a Service")
-if not active_companies:
-    st.warning("No companies registered yet. Please register a company first.")
-    st.stop()
-    active_companies = [c for c in companies_sheet.get_all_records() if c['status'] == "active"]
-    selected_name = st.selectbox("Select Company", [c['company_name'] for c in active_companies])
-    selected_company = next(c for c in active_companies if c['company_name'] == selected_name)
     
+    all_companies = companies_sheet.get_all_records()
+    active_companies = [c for c in all_companies if c.get('Status', '').lower() == 'active']
+
+    if not active_companies:
+        st.warning("No companies registered yet. Please register a company first.")
+        st.stop()
+
+    selected_name = st.selectbox("Select Company", [c['CompanyName'] for c in active_companies])
+    selected_company = next(c for c in active_companies if c['CompanyName'] == selected_name)
+
     with st.form("booking_form"):
+    
         name = st.text_input("Your Name")
         phone = st.text_input("Your Phone")
         email = st.text_input("Your Email")
