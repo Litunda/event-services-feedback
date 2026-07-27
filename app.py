@@ -11,7 +11,7 @@ from twilio.rest import Client
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 client = gspread.authorize(creds)
-sheet = client.open("BookingsDB") 
+sheet = client.open("Event_Feedback") 
 companies_sheet = sheet.worksheet("companies")
 bookings_sheet = sheet.worksheet("bookings")
 
