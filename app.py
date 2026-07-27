@@ -62,6 +62,16 @@ def set_password_page(token):
         companies_sheet.update_cell(row, 6, "active") # status
         st.success("Account Activated! Go to Company Login tab.")
 def login_page():
+    st.title("Login")
+    
+    if st.button("🔑 Continue as Admin"):
+        st.session_state.logged_in = True
+        st.session_state.company_name = "Admin"
+        st.rerun()
+    
+    st.divider()
+    # rest of login code       
+def login_page():
     st.title("Company Login")
 
     # ADMIN BYPASS
@@ -82,7 +92,7 @@ def login_page():
 def admin_dashboard():
     st.title("Admin Dashboard")
     st.subheader("Pending Applications")
-    pending = [c for c in companies_sheet.get_all_records() if c['status'] == "pending"]
+    pending = [c for c in companies_sheet.get_all_records() if str(c.get('Status','')).strip() == 'Pending']
     
     for comp in pending:
         with st.container(border=True):
