@@ -13,7 +13,7 @@ creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"],
 client = gspread.authorize(creds)
 sheet = client.open("Event_Feedback") 
 companies_sheet = sheet.worksheet("companies")
-bookings_sheet = sheet.worksheet("bookings")
+bookings_sheet = sheet.worksheet("bookings_sheet")
 
 # --- SESSION STATE ---
 if 'logged_in' not in st.session_state:
