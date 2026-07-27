@@ -1,51 +1,143 @@
 import streamlit as st
 import gspread
-from google.oauth2.service_account import Credentials
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, date
-import json
-import requests
-import africastalking
+import secrets
 import smtplib
 from email.mime.text import MIMEText
-# CHECK URL FIRST: Are they clicking a "set password" link?
-query_params = st.query_params
-if "set_password" in query_params:
-    set_password_page(query_params["set_password"])
-    st.stop()
+from twilio.rest import Client
 
-# 1. LOGIN PAGE
+# --- GOOGLE SHEETS SETUP ---
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+client = gspread.authorize(creds)
+sheet = client.open("BookingsDB") 
+companies_sheet = sheet.worksheet("companies")
+bookings_sheet = sheet.worksheet("bookings")
+
+# --- SESSION STATE ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.company_id = None
 
-def login():
+# --- HELPERS ---
+def send_approval_email(to_email, link, company_name):
+    subject = f"Your {company_name} account is approved"
+    body = f"Hi {company_name},\n\nYour account is approved. Click here to set your password:\n{link}"
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = st.secrets["EMAIL_SENDER"]
+    msg['To'] = to_email
+    with smtplib.SMTP('smtp.gmail.com', 587) as server:
+        server.starttls()
+        server.login(st.secrets["EMAIL_SENDER"], st.secrets["EMAIL_PASSWORD"])
+        server.sendmail(st.secrets["EMAIL_SENDER"], to_email, msg.as_string())
+
+# --- PAGES ---
+
+def register_page():
+    st.title("Register Your Hiring Company")
+    with st.form("register_form"):
+        name = st.text_input("Company Name")
+        email = st.text_input("Company Login Email")
+        admin_email = st.text_input("Email to receive bookings")
+        admin_wa = st.text_input("WhatsApp to receive bookings e.g. whatsapp:+2547...")
+        submitted = st.form_submit_button("Submit Application")
+        if submitted:
+            company_id = name.lower().replace(" ", "_")
+            new_row = [company_id, name, email, "", "", "pending", "FALSE", admin_email, admin_wa]
+            companies_sheet.append_row(new_row)
+            st.success("Application submitted! We'll review and email you within 24hrs.")
+
+def set_password_page(token):
+    st.title("Set Your Password")
+    all_companies = companies_sheet.get_all_records()
+    company = next((c for c in all_companies if c['temp_token'] == token), None)
+    if not company: st.error("Invalid link"); return
+    
+    p1 = st.text_input("New Password", type="password")
+    if st.button("Activate Account"):
+        row = all_companies.index(company) + 2
+        companies_sheet.update_cell(row, 4, p1) # password
+        companies_sheet.update_cell(row, 5, "") # clear token
+        companies_sheet.update_cell(row, 6, "active") # status
+        st.success("Account Activated! Go to Company Login tab.")
+
+def login_page():
     st.title("Company Login")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
-        company = companies_sheet.find(email) # check companies sheet
-        if company and password == company['password']:
+        comp = next((c for c in companies_sheet.get_all_records() if c['login_email'] == email), None)
+        if comp and comp['password'] == password and comp['status'] == "active":
             st.session_state.logged_in = True
-            st.session_state.company_id = company['company_id']
+            st.session_state.company_id = comp['company_id']
+            st.session_state.is_admin = comp['is_admin'] == "TRUE"
             st.rerun()
-        else:
-            st.error("Wrong credentials")
+        else: st.error("Wrong credentials or account not active")
 
-if not st.session_state.logged_in:
-    login()
-    st.stop() # Stop everything else until they login
+def admin_dashboard():
+    st.title("Admin Dashboard")
+    st.subheader("Pending Applications")
+    pending = [c for c in companies_sheet.get_all_records() if c['status'] == "pending"]
+    
+    for comp in pending:
+        with st.container(border=True):
+            st.write(f"**{comp['company_name']}** - {comp['login_email']}")
+            if st.button(f"Approve {comp['company_name']}", key=comp['company_id']):
+                token = secrets.token_urlsafe(16)
+                row = companies_sheet.get_all_records().index(comp) + 2
+                companies_sheet.update_cell(row, 5, token) # temp_token
+                companies_sheet.update_cell(row, 6, "approved") # status
+                link = f"{st.secrets['APP_URL']}?set_password={token}"
+                send_approval_email(comp['login_email'], link, comp['company_name'])
+                st.success(f"Approved! Invite sent to {comp['login_email']}")
+                st.rerun()
 
-# 2. FILTER BOOKINGS
-company_id = st.session_state.company_id
-all_bookings = booking_sheet.get_all_records()
-my_bookings = [b for b in all_bookings if b['company_id'] == company_id]
-st.dataframe(my_bookings) # Company only sees their own
+    st.divider()
+    st.subheader("All Bookings")
+    st.dataframe(bookings_sheet.get_all_records())
 
-# 3. SEND NOTIFICATIONS TO COMPANY
-company_data = get_company_data(company_id)
-notify_company_all(name, customer_email, event_details, phone, 
-                   company_data['admin_email'], 
-                   company_data['admin_whatsapp'])
+def company_dashboard(company_id):
+    st.title(f"Dashboard")
+    my_bookings = [b for b in bookings_sheet.get_all_records() if b['company_id'] == company_id]
+    st.dataframe(my_bookings)
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+def customer_booking_page():
+    st.title("Book a Service")
+    active_companies = [c for c in companies_sheet.get_all_records() if c['status'] == "active"]
+    selected_name = st.selectbox("Select Company", [c['company_name'] for c in active_companies])
+    selected_company = next(c for c in active_companies if c['company_name'] == selected_name)
+    
+    with st.form("booking_form"):
+        name = st.text_input("Your Name")
+        phone = st.text_input("Your Phone")
+        email = st.text_input("Your Email")
+        event_date = st.date_input("Event Date")
+        event_loc = st.text_input("Event Location")
+        items = st.text_area("Items to Hire")
+        if st.form_submit_button("Send Booking Request"):
+            new_row = [selected_company['company_id'], str(date.today()), name, phone, email, str(event_date), event_loc, "", items, "", "Pending"]
+            bookings_sheet.append_row(new_row)
+            st.success("Booking sent!")
+
+# --- ROUTER ---
+query_params = st.query_params
+if "set_password" in query_params:
+    set_password_page(query_params["set_password"])
+elif st.session_state.get('logged_in'):
+    if st.session_state.get('is_admin'):
+        admin_dashboard()
+    else:
+        company_dashboard(st.session_state.company_id)
+else:
+    tab1, tab2, tab3 = st.tabs(["Book Service", "Company Register", "Company Login"])
+    with tab1: customer_booking_page()
+    with tab2: register_page()
+    with tab3: login_page()
+
 # --- LOAD SECRETS ---
 EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"] 
