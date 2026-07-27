@@ -98,7 +98,7 @@ def register_page():
             st.error("Passwords do not match. Please check and try again.")
         elif len(password) < 6:
             st.warning("Password must be at least 6 characters long for security.")
-        else:
+    else:
             company_id = name.lower().replace(" ", "_")
 # Checks if company ID or email already exists to prevent duplicates
         existing_companies = companies_sheet.get_all_records()
