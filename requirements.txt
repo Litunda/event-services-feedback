@@ -6,5 +6,5 @@ openpyxl
 africastalking
 requests
 google-auth==2.30.0
-
+twilio
 
