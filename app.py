@@ -180,7 +180,7 @@ def admin_dashboard():
         row_idx = all_companies.index(comp) + 2
         companies_sheet.update_cell(row_idx, 5, token)  # temp_token
         companies_sheet.update_cell(row_idx, 6, "active")  # status update
-          app_url = st.secrets.get('APP_URL', 'https://share.streamlit.io'), link = f"{app_url}?set_password={token}"
+app_url = st.secrets.get('APP_URL', 'https://share.streamlit.io'), link = f"{app_url}?set_password={token}"
         send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
         st.success(f"Approved! Invite sent to {comp.get('login_email')}")
         st.rerun()
