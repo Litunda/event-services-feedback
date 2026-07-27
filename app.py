@@ -109,7 +109,7 @@ else:
 # Automatically saves as 'active' with the secure password provided
  new_row = [company_id, name, email, password, "", "active", "FALSE", admin_email, admin_wa]
  companies_sheet.append_row(new_row)
-          st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
+ st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
 def set_password_page(token):
   st.title("Set Your Password")
   all_companies = companies_sheet.get_all_records()
