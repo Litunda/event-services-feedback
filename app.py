@@ -95,6 +95,7 @@ def register_page():
        if not name or not email or not password:
         st.warning("Please fill out Company Name, Login Email, and Password.")
       elif password != confirm_password:
+          
         st.error("Passwords do not match. Please check and try again.")
       elif len(password) < 6:
         st.warning("Password must be at least 6 characters long for security.")
