@@ -85,7 +85,7 @@ def register_page():
   
   with st.form("register_form"):
     name = st.text_input("Company Name")
-    login_email = st.text_input("Company Login Email")  # Variable name is login_email
+    login_email = st.text_input("Company Login Email") 
     password = st.text_input("Choose Password", type="password")
     confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
@@ -102,7 +102,6 @@ def register_page():
       else:
         company_id = name.lower().replace(" ", "_")
         
-        # Check if email already exists using login_email
         existing_companies = companies_sheet.get_all_records()
         email_exists = any(
             str(c.get('login_email', '')).strip().lower() == login_email.strip().lower() 
@@ -115,6 +114,7 @@ def register_page():
           new_row = [company_id, name, login_email, password, "", "active", "FALSE", admin_email, admin_wa]
           companies_sheet.append_row(new_row)
           st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
+
 def set_password_page(token):
   st.title("Set Your Password")
   all_companies = companies_sheet.get_all_records()
@@ -156,24 +156,31 @@ def login_page():
 
   if st.button("Login"):
     all_companies = companies_sheet.get_all_records()
- # --- DEBUG HELPER (Remove after fixing) ---
+    
+    # --- DEBUG HELPER ---
     with st.expander("🔍 Click here to view sheet debugging data"):
       st.write("Fetched Companies from Sheet:", all_companies)
-    # ------------------------------------------
+    # --------------------
 
-    matched_company = next(
-        (c for c in all_companies if str(c.get('login_email', '')).strip().lower() == email.strip().lower() and str(c.get('password', '')) == password),
-        None
-    )
+    matched_company = None
+    for c in all_companies:
+      sheet_email = str(c.get('login_email', '')).strip().lower()
+      sheet_pass = str(c.get('password') or c.get('Password', '')).strip()
+      
+      if sheet_email == email.strip().lower() and sheet_pass == password.strip():
+        matched_company = c
+        break
+
     if matched_company:
-      if str(matched_company.get('Status')).lower() != "active":
+      status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
+      if status != "active":
         st.warning("Your account is pending review or inactive.")
       else:
         st.session_state.logged_in = True
-        st.session_state.company_name = matched_company.get('company_name')
-        st.session_state.company_id = matched_company.get('company_id')
+        st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
+        st.session_state.company_id = matched_company.get('company_id') or matched_company.get('Company_ID')
         st.session_state.is_admin = False
-        st.success(f"Welcome back, {matched_company.get('company_name')}!")
+        st.success(f"Welcome back, {st.session_state.company_name}!")
         st.rerun()
     else:
       st.error("Invalid email or password.")
@@ -215,7 +222,7 @@ def admin_dashboard():
       st.info("No bookings registered on the platform yet.")
   except Exception as e:
     st.error(f"Bookings Sheet Error: {e}")
-    
+      
   if st.button("Logout Admin"):
     st.session_state.logged_in = False
     st.rerun()
@@ -336,7 +343,6 @@ def customer_dashboard_page():
   lookup_val = st.text_input("Enter your Phone Number or Email").strip().lower()
 
   if lookup_val:
-    # 1. Fetch and Filter Customer Bookings
     try:
       all_bookings = bookings_sheet.get_all_records()
       customer_bookings = [
@@ -352,7 +358,6 @@ def customer_dashboard_page():
     except Exception as e:
       st.error(f"Error loading bookings: {e}")
 
-    # 2. Fetch and Filter Customer Feedback
     try:
       all_feedback = feedback_sheet.get_all_records()
       customer_feedback = [
@@ -413,13 +418,11 @@ query_params = st.query_params
 if "set_password" in query_params:
   set_password_page(query_params["set_password"])
 elif st.session_state.get('logged_in'):
-  # Show Dashboard ONLY if logged in as Admin or Company Partner
   if st.session_state.get('is_admin'):
     admin_dashboard()
   else:
     company_dashboard(st.session_state.company_id, st.session_state.company_name)
 else:
-  # Public tabs for customers (No login required for these)
   tab1, tab2, tab3, tab4, tab5 = st.tabs([
       "Make a Booking", 
       "Track My Bookings", 
