@@ -137,7 +137,7 @@ def set_password_page(token):
 
 def login_page():
   st.title("Portal Login")
-  st.subheader("Sign In")
+  st.info("Enter your credentials below. Super Admin and approved company partners use this same login page.")
 
   email = st.text_input("Email")
   password = st.text_input("Password", type="password")
