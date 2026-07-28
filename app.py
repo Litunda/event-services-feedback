@@ -136,10 +136,9 @@ def set_password_page(token):
 
 
 def login_page():
-  st.title("Company Portal Login")
+  st.title("Portal Login")
 
-  # ADMIN BYPASS
-  if st.button("🔑 Login as Super Admin"):
+  if st.button("🔑 Quick Admin Bypass"):
     st.session_state.logged_in = True
     st.session_state.company_name = "Admin"
     st.session_state.company_id = "admin"
@@ -148,36 +147,48 @@ def login_page():
     st.rerun()
 
   st.divider()
-  st.subheader("Company Partner Login")
+  st.subheader("Sign In")
 
-  email = st.text_input("Login Email")
+  email = st.text_input("Email")
   password = st.text_input("Password", type="password")
 
   if st.button("Login"):
-    all_companies = companies_sheet.get_all_records()
-    
-    matched_company = None
-    for c in all_companies:
-      sheet_email = str(c.get('login_email', '')).strip().lower()
-      sheet_pass = str(c.get('password') or c.get('Password', '')).strip()
-      
-      if sheet_email == email.strip().lower() and sheet_pass == password.strip():
-        matched_company = c
-        break
+    # 1. CHECK IF SUPER ADMIN
+    admin_email = st.secrets.get("ADMIN_EMAIL", "admin@admin.com")
+    admin_pass = st.secrets.get("ADMIN_PASSWORD", "admin123")
 
-    if matched_company:
-      status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
-      if status != "active":
-        st.warning("Your account is pending review or inactive. Please wait for Super Admin approval.")
-      else:
-        st.session_state.logged_in = True
-        st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
-        st.session_state.company_id = matched_company.get('company_id') or matched_company.get('Company_ID')
-        st.session_state.is_admin = False
-        st.success(f"Welcome back, {st.session_state.company_name}!")
-        st.rerun()
+    if email.strip().lower() == admin_email.strip().lower() and password.strip() == admin_pass:
+      st.session_state.logged_in = True
+      st.session_state.company_name = "Admin"
+      st.session_state.company_id = "admin"
+      st.session_state.is_admin = True
+      st.success("Logged in as Super Admin Successfully!")
+      st.rerun()
     else:
-      st.error("Invalid email or password.")
+      # 2. CHECK IF COMPANY PARTNER
+      all_companies = companies_sheet.get_all_records()
+      matched_company = None
+      for c in all_companies:
+        sheet_email = str(c.get('login_email', '')).strip().lower()
+        sheet_pass = str(c.get('password') or c.get('Password', '')).strip()
+        
+        if sheet_email == email.strip().lower() and sheet_pass == password.strip():
+          matched_company = c
+          break
+
+      if matched_company:
+        status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
+        if status != "active":
+          st.warning("Your account is pending review or inactive. Please wait for Super Admin approval.")
+        else:
+          st.session_state.logged_in = True
+          st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
+          st.session_state.company_id = matched_company.get('company_id') or matched_company.get('Company_ID')
+          st.session_state.is_admin = False
+          st.success(f"Welcome back, {st.session_state.company_name}!")
+          st.rerun()
+      else:
+        st.error("Invalid email or password.")
 
 
 def admin_dashboard():
@@ -227,7 +238,6 @@ def company_dashboard(company_id, company_name):
   
   try:
     all_bookings = bookings_sheet.get_all_records()
-    # Filter bookings specifically for this logged-in company
     my_bookings = [b for b in all_bookings if str(b.get('company_id')) == str(company_id)]
     
     if my_bookings:
@@ -239,7 +249,6 @@ def company_dashboard(company_id, company_name):
           st.write(f"**Items Hired:** {booking.get('items_to_hire')}")
           st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
 
-          # Allow company to approve or update booking status
           new_status = st.selectbox(
               "Update Booking Status", 
               ["Pending", "Confirmed / Approved", "Completed", "Cancelled"], 
@@ -248,7 +257,6 @@ def company_dashboard(company_id, company_name):
           )
           
           if st.button("Save Status Update", key=f"save_{company_id}_{idx}"):
-            # Find exact row index in Google Sheets
             row_idx = all_bookings.index(booking) + 2
             bookings_sheet.update_cell(row_idx, 12, new_status)  # column 12 is status
             st.success("Booking status updated successfully!")
@@ -444,7 +452,7 @@ else:
       "Track My Bookings", 
       "Submit Feedback", 
       "Register Company", 
-      "Company Login"
+      "Portal Login"
   ])
   with tab1:
     customer_booking_page()
