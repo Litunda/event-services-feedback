@@ -132,21 +132,11 @@ def set_password_page(token):
       companies_sheet.update_cell(row_idx, 4, p1)  # password column
       companies_sheet.update_cell(row_idx, 5, "")  # clear temp_token
       companies_sheet.update_cell(row_idx, 6, "active")  # status column
-      st.success("Account Activated! You can now go to the Company Login tab.")
+      st.success("Account Activated! You can now go to the Portal Login tab.")
 
 
 def login_page():
   st.title("Portal Login")
-
-  if st.button("🔑 Quick Admin Bypass"):
-    st.session_state.logged_in = True
-    st.session_state.company_name = "Admin"
-    st.session_state.company_id = "admin"
-    st.session_state.is_admin = True
-    st.success("Logged in as Admin")
-    st.rerun()
-
-  st.divider()
   st.subheader("Sign In")
 
   email = st.text_input("Email")
@@ -464,3 +454,5 @@ else:
     register_page()
   with tab5:
     login_page()
+
+
