@@ -31,8 +31,7 @@ if "booking_sent" not in st.session_state:
 def send_approval_email(to_email, link, company_name):
   subject = f"Your {company_name} account is approved"
   body = (
-      f"Hi {company_name},\n\nYour account is approved. Click here to set your"
-      f" password:\n{link}"
+      f"Hi {company_name},\n\nYour account is approved. Click here to set your password and activate your account:\n{link}"
   )
   msg = MIMEText(body)
   msg["Subject"] = subject
@@ -81,7 +80,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 # --- PAGES ---
 def register_page():
   st.title("Register Your Hiring Company")
-  st.info("Create your company account and set your secure password immediately.")
+  st.info("Register your company. Accounts require Super Admin approval before you can log in.")
   
   with st.form("register_form"):
     name = st.text_input("Company Name")
@@ -90,7 +89,7 @@ def register_page():
     confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
     admin_wa = st.text_input("WhatsApp to receive bookings (e.g., +2547...)")
-    submitted = st.form_submit_button("Register & Activate Account")
+    submitted = st.form_submit_button("Register Company")
     
     if submitted:
       if not name or not login_email or not password:
@@ -111,17 +110,17 @@ def register_page():
         if email_exists:
           st.error("An account with this login email already exists.")
         else:
-          new_row = [company_id, name, login_email, password, "", "active", "FALSE", admin_email, admin_wa]
+          new_row = [company_id, name, login_email, password, "", "pending", "FALSE", admin_email, admin_wa]
           companies_sheet.append_row(new_row)
-          st.success("Registration successful! You can now go to the 'Company Login' tab and sign in securely.")
+          st.success("Registration successful! Your account is pending Super Admin approval.")
 
 def set_password_page(token):
-  st.title("Set Your Password")
+  st.title("Activate & Set Your Password")
   all_companies = companies_sheet.get_all_records()
   company = next((c for c in all_companies if str(c.get('temp_token', '')) == token), None)
   
   if not company:
-    st.error("Invalid or expired link.")
+    st.error("Invalid or expired activation link.")
     return
 
   p1 = st.text_input("New Password", type="password")
@@ -157,11 +156,6 @@ def login_page():
   if st.button("Login"):
     all_companies = companies_sheet.get_all_records()
     
-    # --- DEBUG HELPER ---
-    with st.expander("🔍 Click here to view sheet debugging data"):
-      st.write("Fetched Companies from Sheet:", all_companies)
-    # --------------------
-
     matched_company = None
     for c in all_companies:
       sheet_email = str(c.get('login_email', '')).strip().lower()
@@ -174,7 +168,7 @@ def login_page():
     if matched_company:
       status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
       if status != "active":
-        st.warning("Your account is pending review or inactive.")
+        st.warning("Your account is pending review or inactive. Please wait for Super Admin approval.")
       else:
         st.session_state.logged_in = True
         st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
@@ -188,28 +182,27 @@ def login_page():
 
 def admin_dashboard():
   st.title("Super Admin Dashboard")
-  st.subheader("Pending Company Applications")
+  st.subheader("🔒 Secure Company Activation & Pending Applications")
   
   all_companies = companies_sheet.get_all_records()
   pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
 
   if not pending:
-    st.info("No pending applications.")
+    st.info("No pending applications awaiting activation.")
 
   for comp in pending:
     with st.container(border=True):
-      st.write(f"*{comp.get('company_name')}* - {comp.get('login_email')}")
-      if st.button(f"Approve {comp.get('company_name')}", key=comp.get('company_id')):
+      st.write(f"**{comp.get('company_name')}** - {comp.get('login_email')}")
+      if st.button(f"Approve & Send Activation Link", key=comp.get('company_id')):
         token = secrets.token_urlsafe(16)
         row_idx = all_companies.index(comp) + 2
         companies_sheet.update_cell(row_idx, 5, token)  # temp_token
-        companies_sheet.update_cell(row_idx, 6, "active")  # status update
           
         app_url = st.secrets.get('APP_URL', 'https://share.streamlit.io')
         link = f"{app_url}?set_password={token}"
           
         send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
-        st.success(f"Approved! Invite sent to {comp.get('login_email')}")
+        st.success(f"Approved! Secure activation email sent to {comp.get('login_email')}")
         st.rerun()
 
   st.divider()
@@ -230,19 +223,42 @@ def admin_dashboard():
 
 def company_dashboard(company_id, company_name):
   st.title(f"{company_name} Dashboard")
+  st.subheader("Manage Assigned Bookings")
   
-  st.subheader("Assigned Bookings")
   try:
     all_bookings = bookings_sheet.get_all_records()
+    # Filter bookings specifically for this logged-in company
     my_bookings = [b for b in all_bookings if str(b.get('company_id')) == str(company_id)]
     
     if my_bookings:
-      st.dataframe(my_bookings)
+      for idx, booking in enumerate(my_bookings):
+        with st.container(border=True):
+          st.write(f"**Client Name:** {booking.get('name')}")
+          st.write(f"**Phone:** {booking.get('phone')} | **Email:** {booking.get('customer_email')}")
+          st.write(f"**Event Date:** {booking.get('event_date')} | **Location:** {booking.get('event_location')}")
+          st.write(f"**Items Hired:** {booking.get('items_to_hire')}")
+          st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
+
+          # Allow company to approve or update booking status
+          new_status = st.selectbox(
+              "Update Booking Status", 
+              ["Pending", "Confirmed / Approved", "Completed", "Cancelled"], 
+              index=0, 
+              key=f"status_{company_id}_{idx}"
+          )
+          
+          if st.button("Save Status Update", key=f"save_{company_id}_{idx}"):
+            # Find exact row index in Google Sheets
+            row_idx = all_bookings.index(booking) + 2
+            bookings_sheet.update_cell(row_idx, 12, new_status)  # column 12 is status
+            st.success("Booking status updated successfully!")
+            st.rerun()
     else:
       st.info("No booking requests assigned to your company yet.")
   except Exception as e:
     st.error(f"Error loading bookings: {e}")
 
+  st.divider()
   if st.button("Logout"):
     st.session_state.logged_in = False
     st.rerun()
