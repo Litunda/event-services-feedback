@@ -45,7 +45,7 @@ def send_approval_email(to_email, link, company_name):
 
 
 def notify_company(company_email, company_wa, name, customer_email, event_details, phone):
-  """Sends Email and WhatsApp notification to the specific hiring company."""
+  """Sends Email and WhatsApp notification to the specific hired company."""
   # 1. EMAIL
   try:
     subject = f"New Booking Request: {name}"
@@ -75,7 +75,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
       payload = {
           "token": st.secrets["ULTRA_TOKEN"],
           "to": company_wa,
-          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your portal dashboard to approve details.",
+          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your Official Dashboard to approve details.",
       }
       requests.post(url, data=payload, timeout=5)
     except Exception as e:
@@ -189,8 +189,8 @@ def login_page():
 
 def admin_dashboard():
   st.title("Super Admin Dashboard")
-  st.subheader("🏢 Company Approvals")
-  st.info("Approve new companies requesting to join the platform.")
+  st.subheader("🏢 Pending Company Approvals")
+  st.info("Approve newly registered companies waiting to use the application.")
   
   all_companies = companies_sheet.get_all_records()
   pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
@@ -215,17 +215,6 @@ def admin_dashboard():
         st.rerun()
 
   st.divider()
-  st.subheader("📊 All Platform Bookings (Read-Only Overview)")
-  st.info("Booking approvals are managed solely by individual hiring companies.")
-  try:
-    bookings = bookings_sheet.get_all_records()
-    if bookings:
-      st.dataframe(bookings)
-    else:
-      st.info("No bookings recorded on the platform yet.")
-  except Exception as e:
-    st.error(f"Bookings Sheet Error: {e}")
-      
   if st.button("Logout Admin"):
     st.session_state.logged_in = False
     st.rerun()
@@ -248,7 +237,6 @@ def company_dashboard(company_id, company_name):
           st.write(f"**Items Hired:** {booking.get('items_to_hire')}")
           st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
 
-          # Map current status to index
           current_st = str(booking.get('status', 'Pending'))
           status_options = ["Pending", "Confirmed / Approved", "Completed", "Cancelled"]
           default_idx = status_options.index(current_st) if current_st in status_options else 0
