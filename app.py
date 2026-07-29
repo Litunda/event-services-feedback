@@ -210,8 +210,13 @@ def admin_dashboard():
         app_url = st.secrets.get('APP_URL', 'https://share.streamlit.io')
         link = f"{app_url}?set_password={token}"
           
-        send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
-        st.success(f"Approved! Activation email sent to {comp.get('login_email')}")
+        try:
+          send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
+          st.success(f"Approved! Activation email sent to {comp.get('login_email')}")
+        except Exception as e:
+          st.warning(f"Company approved in database, but email failed to send due to SMTP error: {e}")
+          st.info(f"Activation Link: {link}")
+          
         st.rerun()
 
   st.divider()
