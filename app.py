@@ -31,7 +31,7 @@ if "booking_sent" not in st.session_state:
 def send_approval_email(to_email, link, company_name):
   subject = f"Your {company_name} account is approved"
   body = (
-      f"Hi {company_name},\n\nYour account is approved. Click here to set your password and activate your account:\n{link}"
+      f"Hi {company_name},\n\nYour account has been approved by the Super Admin. Click here to set your password and activate your account:\n{link}"
   )
   msg = MIMEText(body)
   msg["Subject"] = subject
@@ -80,12 +80,12 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 # --- PAGES ---
 def register_page():
   st.title("Register Your Hiring Company")
-  st.info("Register your company. Accounts require Super Admin approval before you can log in.")
+  st.info("Register your company. Accounts require Super Admin approval before you can access the platform.")
   
   with st.form("register_form"):
     name = st.text_input("Company Name")
     login_email = st.text_input("Company Login Email") 
-    password = st.text_input("Choose Password", type="password")
+    password = st.text_input("Choose Password (temporary placeholder)", type="password")
     confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
     admin_wa = st.text_input("WhatsApp to receive bookings (e.g., +2547...)")
@@ -112,7 +112,7 @@ def register_page():
         else:
           new_row = [company_id, name, login_email, password, "", "pending", "FALSE", admin_email, admin_wa]
           companies_sheet.append_row(new_row)
-          st.success("Registration successful! Your account is pending Super Admin approval.")
+          st.success("Registration successful! Your account is pending Super Admin review and approval.")
 
 def set_password_page(token):
   st.title("Activate & Set Your Password")
@@ -137,7 +137,7 @@ def set_password_page(token):
 
 def login_page():
   st.title("Portal Login")
-  st.info("Enter your credentials below. Super Admin and approved company partners use this same login page.")
+  st.info("Enter your credentials below to access your account.")
 
   email = st.text_input("Email")
   password = st.text_input("Password", type="password")
@@ -169,7 +169,7 @@ def login_page():
       if matched_company:
         status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
         if status != "active":
-          st.warning("Your account is pending review or inactive. Please wait for Super Admin approval.")
+          st.warning("Your account is pending Super Admin review. Please wait for approval.")
         else:
           st.session_state.logged_in = True
           st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
@@ -182,19 +182,20 @@ def login_page():
 
 
 def admin_dashboard():
-  st.title("Super Admin Dashboard (Overview Only)")
-  st.subheader("🔒 Secure Company Activation & Overview")
+  st.title("Super Admin Dashboard")
+  st.subheader("🔒 Company Account Approvals")
+  st.info("Approve companies that want to utilize the platform. You do not approve bookings.")
   
   all_companies = companies_sheet.get_all_records()
   pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
 
   if not pending:
-    st.info("No pending applications awaiting activation.")
+    st.info("No pending company applications awaiting approval.")
 
   for comp in pending:
     with st.container(border=True):
       st.write(f"**{comp.get('company_name')}** - {comp.get('login_email')}")
-      if st.button(f"Approve & Send Activation Link", key=comp.get('company_id')):
+      if st.button(f"Approve Company & Send Activation Link", key=comp.get('company_id')):
         token = secrets.token_urlsafe(16)
         row_idx = all_companies.index(comp) + 2
         companies_sheet.update_cell(row_idx, 5, token)  # temp_token
@@ -203,12 +204,12 @@ def admin_dashboard():
         link = f"{app_url}?set_password={token}"
           
         send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
-        st.success(f"Approved! Secure activation email sent to {comp.get('login_email')}")
+        st.success(f"Company approved! Activation email sent to {comp.get('login_email')}")
         st.rerun()
 
   st.divider()
-  st.subheader("Platform Bookings Overview")
-  st.info("As Super Admin, you have read-only visibility over all bookings. Companies handle their own booking approvals.")
+  st.subheader("Platform Bookings Overview (Read-Only)")
+  st.info("As Super Admin, you can view all bookings across the platform for overview purposes. Companies handle their own booking approvals.")
   try:
     bookings = bookings_sheet.get_all_records()
     if bookings:
@@ -463,4 +464,3 @@ else:
     register_page()
   with tab5:
     login_page()
-
