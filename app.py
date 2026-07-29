@@ -70,7 +70,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
       payload = {
           "token": st.secrets["ULTRA_TOKEN"],
           "to": company_wa,
-          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your dashboard to approve details.",
+          "body": f"NEW BOOKING REQUEST\n\n Client: {name}\n Phone: {phone}\n Email: {customer_email}\n\nCheck your dashboard to approve details.",
       }
       requests.post(url, data=payload, timeout=5)
     except Exception as e:
@@ -183,7 +183,7 @@ def login_page():
 
 def admin_dashboard():
   st.title("Super Admin Dashboard")
-  st.subheader("🔒 Company Account Approvals")
+  st.subheader("Company Account Approvals")
   st.info("Approve companies that want to utilize the platform. You do not approve bookings.")
   
   all_companies = companies_sheet.get_all_records()
@@ -356,7 +356,7 @@ Notes: {notes}"""
       else:
         st.warning("Booking saved to sheet, but email notification skipped because `EMAIL_SENDER` is not configured in Streamlit secrets yet.")
 
-      st.success("✅ Booking request sent successfully to the company!")
+      st.success("Booking request sent successfully to the company!")
       st.balloons()
       st.session_state.booking_sent = False
 
