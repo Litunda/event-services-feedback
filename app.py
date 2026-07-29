@@ -20,6 +20,18 @@ companies_sheet = sheet.worksheet("companies")
 bookings_sheet = sheet.worksheet("bookings_sheet")
 feedback_sheet = sheet.worksheet("Feedback")
 
+
+# --- CACHED DATA FETCHERS TO PREVENT [429] QUOTA ERRORS ---
+@st.cache_data(ttl=10)
+def get_cached_companies():
+  return companies_sheet.get_all_records()
+
+
+@st.cache_data(ttl=10)
+def get_cached_bookings():
+  return bookings_sheet.get_all_records()
+
+
 # --- SESSION STATE ---
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
@@ -31,8 +43,9 @@ if "booking_sent" not in st.session_state:
 def send_approval_email(to_email, link, company_name):
   subject = f"Your {company_name} account is approved"
   body = (
-      f"Hi {company_name},\n\nYour company account has been approved by the Super Admin. "
-      f"Click here to set your password and activate your portal:\n{link}"
+      f"Hi {company_name},\n\nYour company account has been approved by the"
+      f" Super Admin. Click here to set your password and activate your"
+      f" portal:\n{link}"
   )
   msg = MIMEText(body)
   msg["Subject"] = subject
@@ -44,15 +57,18 @@ def send_approval_email(to_email, link, company_name):
     server.sendmail(st.secrets["EMAIL_SENDER"], to_email, msg.as_string())
 
 
-def notify_company(company_email, company_wa, name, customer_email, event_details, phone):
+def notify_company(
+    company_email, company_wa, name, customer_email, event_details, phone
+):
   """Sends Email and WhatsApp notification to the specific hired company."""
   # 1. EMAIL
   try:
     subject = f"New Booking Request: {name}"
     body = (
-        f"Hello,\n\nYou have received a new booking request through the platform.\n\n"
-        f"Client Name: {name}\nEmail: {customer_email}\nPhone: {phone}\n\n"
-        f"Details:\n{event_details}\n\nLog in to your Official Dashboard to review and approve this booking."
+        "Hello,\n\nYou have received a new booking request through the"
+        f" platform.\n\nClient Name: {name}\nEmail:"
+        f" {customer_email}\nPhone: {phone}\n\nDetails:\n{event_details}\n\nLog"
+        " in to your Official Dashboard to review and approve this booking."
     )
     msg = MIMEText(body)
     msg["Subject"] = subject
@@ -75,7 +91,12 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
       payload = {
           "token": st.secrets["ULTRA_TOKEN"],
           "to": company_wa,
-          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your Official Dashboard to approve details.",
+          "body": (
+              f"🔔 NEW BOOKING REQUEST\n\n👤 Client:"
+              f" {name}\n📞 Phone: {phone}\n📧 Email:"
+              f" {customer_email}\n\nCheck your Official Dashboard to approve"
+              " details."
+          ),
       }
       requests.post(url, data=payload, timeout=5)
     except Exception as e:
@@ -85,17 +106,20 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 # --- PAGES ---
 def register_page():
   st.title("Register Your Hiring Company")
-  st.info("Register your company. Registrations are reviewed and approved by the Super Admin before portal activation.")
-  
+  st.info(
+      "Register your company. Registrations are reviewed and approved by the"
+      " Super Admin before portal activation."
+  )
+
   with st.form("register_form"):
     name = st.text_input("Company Name")
-    login_email = st.text_input("Company Login Email") 
+    login_email = st.text_input("Company Login Email")
     password = st.text_input("Choose Password", type="password")
     confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
     admin_wa = st.text_input("WhatsApp to receive bookings (e.g., +2547...)")
     submitted = st.form_submit_button("Register Company")
-    
+
     if submitted:
       if not name or not login_email or not password:
         st.warning("Please fill out Company Name, Login Email, and Password.")
@@ -105,26 +129,42 @@ def register_page():
         st.warning("Password must be at least 6 characters long for security.")
       else:
         company_id = name.lower().replace(" ", "_")
-        
-        existing_companies = companies_sheet.get_all_records()
+
+        existing_companies = get_cached_companies()
         email_exists = any(
-            str(c.get('login_email', '')).strip().lower() == login_email.strip().lower() 
+            str(c.get("login_email", "")).strip().lower()
+            == login_email.strip().lower()
             for c in existing_companies
         )
-        
+
         if email_exists:
           st.error("An account with this login email already exists.")
         else:
-          new_row = [company_id, name, login_email, password, "", "pending", "FALSE", admin_email, admin_wa]
+          new_row = [
+              company_id,
+              name,
+              login_email,
+              password,
+              "",
+              "pending",
+              "FALSE",
+              admin_email,
+              admin_wa,
+          ]
           companies_sheet.append_row(new_row)
-          st.success("Registration submitted! Pending Super Admin company approval.")
+          get_cached_companies.clear()
+          st.success(
+              "Registration submitted! Pending Super Admin company approval."
+          )
 
 
 def set_password_page(token):
   st.title("Activate Company Account")
-  all_companies = companies_sheet.get_all_records()
-  company = next((c for c in all_companies if str(c.get('temp_token', '')) == token), None)
-  
+  all_companies = get_cached_companies()
+  company = next(
+      (c for c in all_companies if str(c.get("temp_token", "")) == token), None
+  )
+
   if not company:
     st.error("Invalid or expired activation link.")
     return
@@ -138,7 +178,11 @@ def set_password_page(token):
       companies_sheet.update_cell(row_idx, 4, p1)  # password column
       companies_sheet.update_cell(row_idx, 5, "")  # clear temp_token
       companies_sheet.update_cell(row_idx, 6, "active")  # status column
-      st.success("Company Portal Activated! You can now log in via the Portal Login tab.")
+      get_cached_companies.clear()
+      st.success(
+          "Company Portal Activated! You can now log in via the Portal Login"
+          " tab."
+      )
 
 
 def login_page():
@@ -153,7 +197,10 @@ def login_page():
     admin_email = st.secrets.get("ADMIN_EMAIL", "admin@admin.com")
     admin_pass = st.secrets.get("ADMIN_PASSWORD", "admin123")
 
-    if email.strip().lower() == admin_email.strip().lower() and password.strip() == admin_pass:
+    if (
+        email.strip().lower() == admin_email.strip().lower()
+        and password.strip() == admin_pass
+    ):
       st.session_state.logged_in = True
       st.session_state.company_name = "Super Admin"
       st.session_state.company_id = "admin"
@@ -162,26 +209,40 @@ def login_page():
       st.rerun()
     else:
       # 2. CHECK IF COMPANY PARTNER
-      all_companies = companies_sheet.get_all_records()
+      all_companies = get_cached_companies()
       matched_company = None
       for c in all_companies:
-        sheet_email = str(c.get('login_email', '')).strip().lower()
-        sheet_pass = str(c.get('password') or c.get('Password', '')).strip()
-        
-        if sheet_email == email.strip().lower() and sheet_pass == password.strip():
+        sheet_email = str(c.get("login_email", "")).strip().lower()
+        sheet_pass = str(c.get("password") or c.get("Password", "")).strip()
+
+        if (
+            sheet_email == email.strip().lower()
+            and sheet_pass == password.strip()
+        ):
           matched_company = c
           break
 
       if matched_company:
-        status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
+        status = str(
+            matched_company.get("Status")
+            or matched_company.get("status")
+            or ""
+        ).strip().lower()
         if status != "active":
           st.warning("Your company account is awaiting Super Admin approval.")
         else:
           st.session_state.logged_in = True
-          st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
-          st.session_state.company_id = matched_company.get('company_id') or matched_company.get('Company_ID')
+          st.session_state.company_name = matched_company.get(
+              "company_name"
+          ) or matched_company.get("CompanyName")
+          st.session_state.company_id = matched_company.get(
+              "company_id"
+          ) or matched_company.get("Company_ID")
           st.session_state.is_admin = False
-          st.success(f"Welcome back to {st.session_state.company_name} Official Dashboard!")
+          st.success(
+              f"Welcome back to {st.session_state.company_name} Official"
+              " Dashboard!"
+          )
           st.rerun()
       else:
         st.error("Invalid email or password.")
@@ -191,9 +252,13 @@ def admin_dashboard():
   st.title("Super Admin Dashboard")
   st.subheader("🏢 Pending Company Approvals")
   st.info("Approve newly registered companies waiting to use the application.")
-  
-  all_companies = companies_sheet.get_all_records()
-  pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
+
+  all_companies = get_cached_companies()
+  pending = [
+      c
+      for c in all_companies
+      if str(c.get("Status", "")).strip().lower() == "pending"
+  ]
 
   if not pending:
     st.info("No pending company applications awaiting approval.")
@@ -202,21 +267,29 @@ def admin_dashboard():
     with st.container(border=True):
       st.write(f"**Company Name:** {comp.get('company_name')}")
       st.write(f"**Login Email:** {comp.get('login_email')}")
-      if st.button(f"Approve Company & Send Activation Link", key=comp.get('company_id')):
+      if st.button(
+          "Approve Company & Send Activation Link", key=comp.get("company_id")
+      ):
         token = secrets.token_urlsafe(16)
         row_idx = all_companies.index(comp) + 2
         companies_sheet.update_cell(row_idx, 5, token)  # temp_token
-          
-        app_url = st.secrets.get('APP_URL', 'https://share.streamlit.io')
+
+        app_url = st.secrets.get("APP_URL", "https://share.streamlit.io")
         link = f"{app_url}?set_password={token}"
-          
+
         try:
-          send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
+          send_approval_email(
+              comp.get("login_email"), link, comp.get("company_name")
+          )
           st.success(f"Approved! Activation email sent to {comp.get('login_email')}")
         except Exception as e:
-          st.warning(f"Company approved in database, but email failed to send due to SMTP error: {e}")
+          st.warning(
+              "Company approved in database, but email failed to send due to"
+              f" SMTP error: {e}"
+          )
           st.info(f"Activation Link: {link}")
-          
+
+        get_cached_companies.clear()
         st.rerun()
 
   st.divider()
@@ -228,34 +301,52 @@ def admin_dashboard():
 def company_dashboard(company_id, company_name):
   st.title("Official Dashboard")
   st.subheader("Review and Approve Assigned Bookings")
-  
+
   try:
-    all_bookings = bookings_sheet.get_all_records()
-    my_bookings = [b for b in all_bookings if str(b.get('company_id')) == str(company_id)]
-    
+    all_bookings = get_cached_bookings()
+    my_bookings = [
+        b for b in all_bookings if str(b.get("company_id")) == str(company_id)
+    ]
+
     if my_bookings:
       for idx, booking in enumerate(my_bookings):
         with st.container(border=True):
           st.write(f"**Client Name:** {booking.get('name')}")
-          st.write(f"**Phone:** {booking.get('phone')} | **Email:** {booking.get('customer_email')}")
-          st.write(f"**Event Date:** {booking.get('event_date')} | **Location:** {booking.get('event_location')}")
+          st.write(
+              f"**Phone:** {booking.get('phone')} | **Email:**"
+              f" {booking.get('customer_email')}"
+          )
+          st.write(
+              f"**Event Date:** {booking.get('event_date')} | **Location:**"
+              f" {booking.get('event_location')}"
+          )
           st.write(f"**Items Hired:** {booking.get('items_to_hire')}")
           st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
 
-          current_st = str(booking.get('status', 'Pending'))
-          status_options = ["Pending", "Confirmed / Approved", "Completed", "Cancelled"]
-          default_idx = status_options.index(current_st) if current_st in status_options else 0
+          current_st = str(booking.get("status", "Pending"))
+          status_options = [
+              "Pending",
+              "Confirmed / Approved",
+              "Completed",
+              "Cancelled",
+          ]
+          default_idx = (
+              status_options.index(current_st)
+              if current_st in status_options
+              else 0
+          )
 
           new_status = st.selectbox(
-              "Update / Approve Booking Status", 
-              status_options, 
-              index=default_idx, 
-              key=f"status_{company_id}_{idx}"
+              "Update / Approve Booking Status",
+              status_options,
+              index=default_idx,
+              key=f"status_{company_id}_{idx}",
           )
-          
+
           if st.button("Save Status Update", key=f"save_{company_id}_{idx}"):
             row_idx = all_bookings.index(booking) + 2
-            bookings_sheet.update_cell(row_idx, 12, new_status)  # column 12 is status
+            bookings_sheet.update_cell(row_idx, 12, new_status)  # status column
+            get_cached_bookings.clear()
             st.success("Booking status updated successfully!")
             st.rerun()
     else:
@@ -272,42 +363,82 @@ def company_dashboard(company_id, company_name):
 # INVENTORY LIST
 inventory = {
     "Audio Equipment": ["Microphones", "Speakers", "Amplifiers", "Mixers"],
-    "Visual Equipment": ["LED Screens", "Projector Screens", "LCD/Plasma Displays", "Backdrop Screens", "Interactive Touch Screens", "Mobile Screens"],
+    "Visual Equipment": [
+        "LED Screens",
+        "Projector Screens",
+        "LCD/Plasma Displays",
+        "Backdrop Screens",
+        "Interactive Touch Screens",
+        "Mobile Screens",
+    ],
     "Furniture & Setup": ["Chairs", "Tables", "Tents", "Podiums", "Stages"],
-    "Decoration Materials": ["Drapes", "Flowers", "Balloons", "Banners", "Branding Props"],
-    "Catering Materials": ["Cutlery", "Crockery", "Serving Stations", "Food Storage Units"],
+    "Decoration Materials": [
+        "Drapes",
+        "Flowers",
+        "Balloons",
+        "Banners",
+        "Branding Props",
+    ],
+    "Catering Materials": [
+        "Cutlery",
+        "Crockery",
+        "Serving Stations",
+        "Food Storage Units",
+    ],
     "Stationery & Print": ["Invitations", "Programs", "Signage", "Name Tags"],
     "Transport Vehicles": ["Vans", "Trucks", "Cars"],
     "Safety Gear": ["Fire Extinguishers", "First Aid Kits", "Barriers", "Uniforms"],
     "Power Supply": ["Generators", "Extension Cables", "Backup Batteries"],
-    "Technology Tools": ["Laptops", "Event Management Software", "Livestream Kits"]
+    "Technology Tools": [
+        "Laptops",
+        "Event Management Software",
+        "Livestream Kits",
+    ],
 }
 
 
 def customer_booking_page():
   st.title("Book Equipment & Services")
-  st.info("No account required! Select a company, fill out your event details, and submit.")
-  
-  all_companies = companies_sheet.get_all_records()
-  active_companies = [c for c in all_companies if str(c.get('Status', '')).lower() == 'active']
+  st.info(
+      "No account required! Select a company, fill out your event details, and"
+      " submit."
+  )
+
+  all_companies = get_cached_companies()
+  active_companies = [
+      c
+      for c in all_companies
+      if str(c.get("Status", "")).lower() == "active"
+  ]
 
   if not active_companies:
-    st.warning("No active hiring companies are available right now. Please check back later.")
+    st.warning(
+        "No active hiring companies are available right now. Please check back"
+        " later."
+    )
     return
 
-  company_options = {c['company_name']: c for c in active_companies}
-  selected_company_name = st.selectbox("Select Preferred Hiring Company", list(company_options.keys()))
+  company_options = {c["company_name"]: c for c in active_companies}
+  selected_company_name = st.selectbox(
+      "Select Preferred Hiring Company", list(company_options.keys())
+  )
   selected_company_obj = company_options[selected_company_name]
 
   name = st.text_input("Your Name", key="b_name")
   phone = st.text_input("Your Phone Number", key="b_phone")
   event_date = st.date_input("Event Service Date", date.today(), key="b_date")
   customer_email = st.text_input("Your Email", key="b_email")
-  event_location = st.text_input("Event Location/Venue", "e.g. Kakamega", key="b_eloc")
-  dispatch_location = st.text_input("Where should we dispatch/deliver to?", "e.g. Town Hall", key="b_dloc")
+  event_location = st.text_input(
+      "Event Location/Venue", "e.g. Kakamega", key="b_eloc"
+  )
+  dispatch_location = st.text_input(
+      "Where should we dispatch/deliver to?", "e.g. Town Hall", key="b_dloc"
+  )
 
   st.subheader("What do you want to hire?")
-  selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="b_cat")
+  selected_categories = st.multiselect(
+      "Select Categories", list(inventory.keys()), key="b_cat"
+  )
   items_to_hire = []
   if selected_categories:
     for cat in selected_categories:
@@ -321,14 +452,18 @@ def customer_booking_page():
   except Exception:
     has_email_sender = False
 
-  if st.button("Send Booking Request", key="b_submit", disabled=st.session_state.booking_sent):
+  if st.button(
+      "Send Booking Request",
+      key="b_submit",
+      disabled=st.session_state.booking_sent,
+  ):
     if not name or not phone:
       st.warning("Please provide your name and phone number.")
     else:
       st.session_state.booking_sent = True
 
       new_row = [
-          selected_company_obj['company_id'],
+          selected_company_obj["company_id"],
           str(date.today()),
           name,
           phone,
@@ -339,9 +474,10 @@ def customer_booking_page():
           selected_company_name,
           ", ".join(items_to_hire),
           notes,
-          "Pending"
+          "Pending",
       ]
       bookings_sheet.append_row(new_row)
+      get_cached_bookings.clear()
 
       event_details = f"""Date: {event_date}
 Location: {event_location}
@@ -351,12 +487,12 @@ Notes: {notes}"""
 
       if has_email_sender:
         notify_company(
-            selected_company_obj.get('admin_email'),
-            selected_company_obj.get('admin_wa'),
+            selected_company_obj.get("admin_email"),
+            selected_company_obj.get("admin_wa"),
             name,
             customer_email,
             event_details,
-            phone
+            phone,
         )
 
       st.success("✅ Booking request sent successfully to the company!")
@@ -366,16 +502,21 @@ Notes: {notes}"""
 
 def customer_dashboard_page():
   st.title("My Customer Portal")
-  st.info("Enter your phone number or email to track your bookings and view your history.")
+  st.info(
+      "Enter your phone number or email to track your bookings and view your"
+      " history."
+  )
 
   lookup_val = st.text_input("Enter your Phone Number or Email").strip().lower()
 
   if lookup_val:
     try:
-      all_bookings = bookings_sheet.get_all_records()
+      all_bookings = get_cached_bookings()
       customer_bookings = [
-          b for b in all_bookings 
-          if lookup_val in str(b.get('phone', '')).lower() or lookup_val in str(b.get('customer_email', '')).lower()
+          b
+          for b in all_bookings
+          if lookup_val in str(b.get("phone", "")).lower()
+          or lookup_val in str(b.get("customer_email", "")).lower()
       ]
 
       st.subheader("Your Booking Requests")
@@ -389,8 +530,10 @@ def customer_dashboard_page():
     try:
       all_feedback = feedback_sheet.get_all_records()
       customer_feedback = [
-          f for f in all_feedback 
-          if lookup_val in str(f.get('f_phone', '')).lower() or lookup_val in str(f.get('f_name', '')).lower()
+          f
+          for f in all_feedback
+          if lookup_val in str(f.get("f_phone", "")).lower()
+          or lookup_val in str(f.get("f_name", "")).lower()
       ]
 
       if customer_feedback:
@@ -407,7 +550,9 @@ def feedback_page():
   f_event_date = st.date_input("Date of your Event", key="f_date")
 
   st.subheader("What did you hire?")
-  f_selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="f_cat")
+  f_selected_categories = st.multiselect(
+      "Select Categories", list(inventory.keys()), key="f_cat"
+  )
   items_used = []
   if f_selected_categories:
     for cat in f_selected_categories:
@@ -434,7 +579,7 @@ def feedback_page():
         str(ratings),
         staff,
         delivery,
-        comments
+        comments,
     ]
     feedback_sheet.append_row(new_row)
     st.success("Thank you! Your feedback has been saved.")
@@ -445,18 +590,20 @@ query_params = st.query_params
 
 if "set_password" in query_params:
   set_password_page(query_params["set_password"])
-elif st.session_state.get('logged_in'):
-  if st.session_state.get('is_admin'):
+elif st.session_state.get("logged_in"):
+  if st.session_state.get("is_admin"):
     admin_dashboard()
   else:
-    company_dashboard(st.session_state.company_id, st.session_state.company_name)
+    company_dashboard(
+        st.session_state.company_id, st.session_state.company_name
+    )
 else:
   tab1, tab2, tab3, tab4, tab5 = st.tabs([
-      "Make a Booking", 
-      "Track My Bookings", 
-      "Submit Feedback", 
-      "Register Company", 
-      "Portal Login"
+      "Make a Booking",
+      "Track My Bookings",
+      "Submit Feedback",
+      "Register Company",
+      "Portal Login",
   ])
   with tab1:
     customer_booking_page()
