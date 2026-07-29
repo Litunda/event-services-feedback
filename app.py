@@ -48,7 +48,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
   # 1. EMAIL
   try:
     subject = f"New Booking Request: {name}"
-    body = f"""Hello,\n\nYou have received a new booking request through the platform.\n\nClient Name: {name}\nEmail: {customer_email}\nPhone: {phone}\n\nDetails:\n{event_details}\n\nLog in to your dashboard to manage this booking."""
+    body = f"""Hello,\n\nYou have received a new booking request through the platform.\n\nClient Name: {name}\nEmail: {customer_email}\nPhone: {phone}\n\nDetails:\n{event_details}\n\nLog in to your dashboard to review and approve this booking."""
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = st.secrets["EMAIL_SENDER"]
@@ -70,7 +70,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
       payload = {
           "token": st.secrets["ULTRA_TOKEN"],
           "to": company_wa,
-          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your dashboard for details.",
+          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your dashboard to approve details.",
       }
       requests.post(url, data=payload, timeout=5)
     except Exception as e:
@@ -182,8 +182,8 @@ def login_page():
 
 
 def admin_dashboard():
-  st.title("Super Admin Dashboard")
-  st.subheader("🔒 Secure Company Activation & Pending Applications")
+  st.title("Super Admin Dashboard (Overview Only)")
+  st.subheader("🔒 Secure Company Activation & Overview")
   
   all_companies = companies_sheet.get_all_records()
   pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
@@ -207,7 +207,8 @@ def admin_dashboard():
         st.rerun()
 
   st.divider()
-  st.subheader("All Platform Bookings")
+  st.subheader("Platform Bookings Overview")
+  st.info("As Super Admin, you have read-only visibility over all bookings. Companies handle their own booking approvals.")
   try:
     bookings = bookings_sheet.get_all_records()
     if bookings:
@@ -224,7 +225,7 @@ def admin_dashboard():
 
 def company_dashboard(company_id, company_name):
   st.title(f"{company_name} Dashboard")
-  st.subheader("Manage Assigned Bookings")
+  st.subheader("Review and Approve Assigned Bookings")
   
   try:
     all_bookings = bookings_sheet.get_all_records()
@@ -240,7 +241,7 @@ def company_dashboard(company_id, company_name):
           st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
 
           new_status = st.selectbox(
-              "Update Booking Status", 
+              "Update / Approve Booking Status", 
               ["Pending", "Confirmed / Approved", "Completed", "Cancelled"], 
               index=0, 
               key=f"status_{company_id}_{idx}"
@@ -309,6 +310,11 @@ def customer_booking_page():
 
   notes = st.text_area("Additional Notes / Quantity needed")
 
+  try:
+    has_email_sender = bool(st.secrets.get("EMAIL_SENDER"))
+  except Exception:
+    has_email_sender = False
+
   if st.button("Send Booking Request", key="b_submit", disabled=st.session_state.booking_sent):
     if not name or not phone:
       st.warning("Please provide your name and phone number.")
@@ -337,14 +343,17 @@ Dispatch: {dispatch_location}
 Items Booked: {', '.join(items_to_hire)}
 Notes: {notes}"""
 
-      notify_company(
-          selected_company_obj.get('admin_email'),
-          selected_company_obj.get('admin_wa'),
-          name,
-          customer_email,
-          event_details,
-          phone
-      )
+      if has_email_sender:
+        notify_company(
+            selected_company_obj.get('admin_email'),
+            selected_company_obj.get('admin_wa'),
+            name,
+            customer_email,
+            event_details,
+            phone
+        )
+      else:
+        st.warning("Booking saved to sheet, but email notification skipped because `EMAIL_SENDER` is not configured in Streamlit secrets yet.")
 
       st.success("✅ Booking request sent successfully to the company!")
       st.balloons()
@@ -454,5 +463,4 @@ else:
     register_page()
   with tab5:
     login_page()
-
 
