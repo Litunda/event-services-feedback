@@ -31,7 +31,8 @@ if "booking_sent" not in st.session_state:
 def send_approval_email(to_email, link, company_name):
   subject = f"Your {company_name} account is approved"
   body = (
-      f"Hi {company_name},\n\nYour account has been approved by the Super Admin. Click here to set your password and activate your account:\n{link}"
+      f"Hi {company_name},\n\nYour company account has been approved by the Super Admin. "
+      f"Click here to set your password and activate your portal:\n{link}"
   )
   msg = MIMEText(body)
   msg["Subject"] = subject
@@ -44,11 +45,15 @@ def send_approval_email(to_email, link, company_name):
 
 
 def notify_company(company_email, company_wa, name, customer_email, event_details, phone):
-  """Sends Email and WhatsApp notification to the specific hired company."""
+  """Sends Email and WhatsApp notification to the specific hiring company."""
   # 1. EMAIL
   try:
     subject = f"New Booking Request: {name}"
-    body = f"""Hello,\n\nYou have received a new booking request through the platform.\n\nClient Name: {name}\nEmail: {customer_email}\nPhone: {phone}\n\nDetails:\n{event_details}\n\nLog in to your dashboard to review and approve this booking."""
+    body = (
+        f"Hello,\n\nYou have received a new booking request through the platform.\n\n"
+        f"Client Name: {name}\nEmail: {customer_email}\nPhone: {phone}\n\n"
+        f"Details:\n{event_details}\n\nLog in to your Official Dashboard to review and approve this booking."
+    )
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = st.secrets["EMAIL_SENDER"]
@@ -70,7 +75,7 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
       payload = {
           "token": st.secrets["ULTRA_TOKEN"],
           "to": company_wa,
-          "body": f"NEW BOOKING REQUEST\n\n Client: {name}\n Phone: {phone}\n Email: {customer_email}\n\nCheck your dashboard to approve details.",
+          "body": f"🔔 NEW BOOKING REQUEST\n\n👤 Client: {name}\n📞 Phone: {phone}\n📧 Email: {customer_email}\n\nCheck your portal dashboard to approve details.",
       }
       requests.post(url, data=payload, timeout=5)
     except Exception as e:
@@ -80,12 +85,12 @@ def notify_company(company_email, company_wa, name, customer_email, event_detail
 # --- PAGES ---
 def register_page():
   st.title("Register Your Hiring Company")
-  st.info("Register your company. Accounts require Super Admin approval before you can access the platform.")
+  st.info("Register your company. Registrations are reviewed and approved by the Super Admin before portal activation.")
   
   with st.form("register_form"):
     name = st.text_input("Company Name")
     login_email = st.text_input("Company Login Email") 
-    password = st.text_input("Choose Password (temporary placeholder)", type="password")
+    password = st.text_input("Choose Password", type="password")
     confirm_password = st.text_input("Confirm Password", type="password")
     admin_email = st.text_input("Email to receive booking notifications")
     admin_wa = st.text_input("WhatsApp to receive bookings (e.g., +2547...)")
@@ -112,10 +117,11 @@ def register_page():
         else:
           new_row = [company_id, name, login_email, password, "", "pending", "FALSE", admin_email, admin_wa]
           companies_sheet.append_row(new_row)
-          st.success("Registration successful! Your account is pending Super Admin review and approval.")
+          st.success("Registration submitted! Pending Super Admin company approval.")
+
 
 def set_password_page(token):
-  st.title("Activate & Set Your Password")
+  st.title("Activate Company Account")
   all_companies = companies_sheet.get_all_records()
   company = next((c for c in all_companies if str(c.get('temp_token', '')) == token), None)
   
@@ -123,8 +129,8 @@ def set_password_page(token):
     st.error("Invalid or expired activation link.")
     return
 
-  p1 = st.text_input("New Password", type="password")
-  if st.button("Activate Account"):
+  p1 = st.text_input("Set Your Official Password", type="password")
+  if st.button("Activate Company Portal"):
     if len(p1) < 6:
       st.warning("Password must be at least 6 characters long.")
     else:
@@ -132,12 +138,12 @@ def set_password_page(token):
       companies_sheet.update_cell(row_idx, 4, p1)  # password column
       companies_sheet.update_cell(row_idx, 5, "")  # clear temp_token
       companies_sheet.update_cell(row_idx, 6, "active")  # status column
-      st.success("Account Activated! You can now go to the Portal Login tab.")
+      st.success("Company Portal Activated! You can now log in via the Portal Login tab.")
 
 
 def login_page():
   st.title("Portal Login")
-  st.info("Enter your credentials below to access your account.")
+  st.info("Enter your credentials below to access your Official Dashboard.")
 
   email = st.text_input("Email")
   password = st.text_input("Password", type="password")
@@ -149,7 +155,7 @@ def login_page():
 
     if email.strip().lower() == admin_email.strip().lower() and password.strip() == admin_pass:
       st.session_state.logged_in = True
-      st.session_state.company_name = "Admin"
+      st.session_state.company_name = "Super Admin"
       st.session_state.company_id = "admin"
       st.session_state.is_admin = True
       st.success("Logged in as Super Admin Successfully!")
@@ -169,13 +175,13 @@ def login_page():
       if matched_company:
         status = str(matched_company.get('Status') or matched_company.get('status') or '').strip().lower()
         if status != "active":
-          st.warning("Your account is pending Super Admin review. Please wait for approval.")
+          st.warning("Your company account is awaiting Super Admin approval.")
         else:
           st.session_state.logged_in = True
           st.session_state.company_name = matched_company.get('company_name') or matched_company.get('CompanyName')
           st.session_state.company_id = matched_company.get('company_id') or matched_company.get('Company_ID')
           st.session_state.is_admin = False
-          st.success(f"Welcome back, {st.session_state.company_name}!")
+          st.success(f"Welcome back to {st.session_state.company_name} Official Dashboard!")
           st.rerun()
       else:
         st.error("Invalid email or password.")
@@ -183,8 +189,8 @@ def login_page():
 
 def admin_dashboard():
   st.title("Super Admin Dashboard")
-  st.subheader("Company Account Approvals")
-  st.info("Approve companies that want to utilize the platform. You do not approve bookings.")
+  st.subheader("🏢 Company Approvals")
+  st.info("Approve new companies requesting to join the platform.")
   
   all_companies = companies_sheet.get_all_records()
   pending = [c for c in all_companies if str(c.get('Status', '')).strip().lower() == 'pending']
@@ -194,7 +200,8 @@ def admin_dashboard():
 
   for comp in pending:
     with st.container(border=True):
-      st.write(f"**{comp.get('company_name')}** - {comp.get('login_email')}")
+      st.write(f"**Company Name:** {comp.get('company_name')}")
+      st.write(f"**Login Email:** {comp.get('login_email')}")
       if st.button(f"Approve Company & Send Activation Link", key=comp.get('company_id')):
         token = secrets.token_urlsafe(16)
         row_idx = all_companies.index(comp) + 2
@@ -204,18 +211,18 @@ def admin_dashboard():
         link = f"{app_url}?set_password={token}"
           
         send_approval_email(comp.get('login_email'), link, comp.get('company_name'))
-        st.success(f"Company approved! Activation email sent to {comp.get('login_email')}")
+        st.success(f"Approved! Activation email sent to {comp.get('login_email')}")
         st.rerun()
 
   st.divider()
-  st.subheader("Platform Bookings Overview (Read-Only)")
-  st.info("As Super Admin, you can view all bookings across the platform for overview purposes. Companies handle their own booking approvals.")
+  st.subheader("📊 All Platform Bookings (Read-Only Overview)")
+  st.info("Booking approvals are managed solely by individual hiring companies.")
   try:
     bookings = bookings_sheet.get_all_records()
     if bookings:
       st.dataframe(bookings)
     else:
-      st.info("No bookings registered on the platform yet.")
+      st.info("No bookings recorded on the platform yet.")
   except Exception as e:
     st.error(f"Bookings Sheet Error: {e}")
       
@@ -225,7 +232,7 @@ def admin_dashboard():
 
 
 def company_dashboard(company_id, company_name):
-  st.title(f"{company_name} Dashboard")
+  st.title("Official Dashboard")
   st.subheader("Review and Approve Assigned Bookings")
   
   try:
@@ -241,10 +248,15 @@ def company_dashboard(company_id, company_name):
           st.write(f"**Items Hired:** {booking.get('items_to_hire')}")
           st.write(f"**Current Status:** `{booking.get('status', 'Pending')}`")
 
+          # Map current status to index
+          current_st = str(booking.get('status', 'Pending'))
+          status_options = ["Pending", "Confirmed / Approved", "Completed", "Cancelled"]
+          default_idx = status_options.index(current_st) if current_st in status_options else 0
+
           new_status = st.selectbox(
               "Update / Approve Booking Status", 
-              ["Pending", "Confirmed / Approved", "Completed", "Cancelled"], 
-              index=0, 
+              status_options, 
+              index=default_idx, 
               key=f"status_{company_id}_{idx}"
           )
           
@@ -281,7 +293,7 @@ inventory = {
 
 def customer_booking_page():
   st.title("Book Equipment & Services")
-  st.info("No account required! Simply select a company, fill out your event details, and submit.")
+  st.info("No account required! Select a company, fill out your event details, and submit.")
   
   all_companies = companies_sheet.get_all_records()
   active_companies = [c for c in all_companies if str(c.get('Status', '')).lower() == 'active']
@@ -298,8 +310,8 @@ def customer_booking_page():
   phone = st.text_input("Your Phone Number", key="b_phone")
   event_date = st.date_input("Event Service Date", date.today(), key="b_date")
   customer_email = st.text_input("Your Email", key="b_email")
-  event_location = st.text_input("Event Location/Venue", "e.g. Kisumu, Milimani", key="b_eloc")
-  dispatch_location = st.text_input("Where should we dispatch/deliver to?", "e.g. Tom Mboya Hall", key="b_dloc")
+  event_location = st.text_input("Event Location/Venue", "e.g. Kakamega", key="b_eloc")
+  dispatch_location = st.text_input("Where should we dispatch/deliver to?", "e.g. Town Hall", key="b_dloc")
 
   st.subheader("What do you want to hire?")
   selected_categories = st.multiselect("Select Categories", list(inventory.keys()), key="b_cat")
@@ -353,12 +365,11 @@ Notes: {notes}"""
             event_details,
             phone
         )
-      else:
-        st.warning("Booking saved to sheet, but email notification skipped because `EMAIL_SENDER` is not configured in Streamlit secrets yet.")
 
-      st.success("Booking request sent successfully to the company!")
+      st.success("✅ Booking request sent successfully to the company!")
       st.balloons()
       st.session_state.booking_sent = False
+
 
 def customer_dashboard_page():
   st.title("My Customer Portal")
